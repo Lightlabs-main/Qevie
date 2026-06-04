@@ -18,29 +18,13 @@ const appBaseUrl = import.meta.env["VITE_APP_BASE_URL"] ?? "https://app.qevie.io
 
 const contractAddresses = isTestnet ? TESTNET_CONTRACTS : MAINNET_CONTRACTS;
 
-// Validate required contract addresses are present.
-const requiredContracts: (keyof QevieContracts)[] = [
-  "entryPoint",
-  "accountFactory",
-  "paymaster",
-  "batchPayments",
-  "paymentRequest",
-  "subscriptionManager",
-  "usernameRegistry",
-  "qusdc",
-  "wqie",
-  "dexPair",
-];
-
-const missingContracts = requiredContracts.filter(
-  (k) => contractAddresses[k] === undefined,
-);
-
-if (missingContracts.length > 0 && import.meta.env["VITE_SKIP_CONTRACT_CHECK"] !== "true") {
-  console.warn(
-    `[qevie] Contract addresses missing: ${missingContracts.join(", ")}. ` +
-    `Set them in .env or deploy contracts first.`,
+if (!isTestnet) {
+  const missing = (Object.keys(contractAddresses) as (keyof QevieContracts)[]).filter(
+    (k) => contractAddresses[k] === undefined,
   );
+  if (missing.length > 0 && import.meta.env["VITE_SKIP_CONTRACT_CHECK"] !== "true") {
+    console.warn(`[qevie] Missing mainnet contract addresses: ${missing.join(", ")}`);
+  }
 }
 
 export const APP_CONFIG = {

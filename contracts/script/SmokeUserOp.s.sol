@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
-import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
+import {IEntryPoint} from "../src/interfaces/IEntryPoint.sol";
+import {PackedUserOperation} from "../src/interfaces/PackedUserOperation.sol";
 
 import {QevieSmartAccount} from "../src/account/QevieSmartAccount.sol";
 import {QevieSmartAccountFactory} from "../src/account/QevieSmartAccountFactory.sol";
