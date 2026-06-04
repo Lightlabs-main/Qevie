@@ -1,0 +1,121 @@
+import React, { useState } from "react";
+import { useQevieClient } from "@qevie/sdk/react";
+import { useWallet } from "../hooks/useWallet.js";
+import { buildPaymentUri } from "@qevie/sdk";
+import { APP_CONFIG } from "../config.js";
+import { QRCodeSVG } from "qrcode.react";
+
+type Step = "form" | "created";
+
+export default function Request(): React.ReactElement {
+  const client = useQevieClient();
+  const { address, signer } = useWallet();
+
+  const [from, setFrom] = useState("");
+  const [amount, setAmount] = useState("");
+  const [memo, setMemo] = useState("");
+  const [step, setStep] = useState<Step>("form");
+  const [payUri, setPayUri] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  async function handleCreate(): Promise<void> {
+    if (address === null || signer === null) return;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const amountUnits = BigInt(Math.round(Number(amount) * 1e6));
+      await client.requestPayment(signer, {
+        from: from.trim() || undefined,
+        amount: amountUnits,
+        memo: memo.trim() || undefined,
+        expirySeconds: 86400 * 30,
+      });
+
+      const uri = buildPaymentUri({
+        to: address,
+        amount: amountUnits,
+        memo: memo.trim() || undefined,
+      });
+      setPayUri(uri);
+      setStep("created");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create request");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  if (step === "created" && payUri !== null) {
+    const shareUrl = `${APP_CONFIG.appBaseUrl}/pay?pay=${encodeURIComponent(payUri)}`;
+    return (
+      <main className="page">
+        <h2 style={{ marginBottom: "1.5rem" }}>Request created</h2>
+        <div className="card" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", marginBottom: "1.5rem" }}>
+          <QRCodeSVG value={payUri} size={200} bgColor="transparent" fgColor="var(--text)" />
+          <p className="text-muted" style={{ fontSize: "0.8rem", wordBreak: "break-all", textAlign: "center" }}>
+            {payUri}
+          </p>
+        </div>
+        <button
+          onClick={() => { void navigator.clipboard.writeText(shareUrl); }}
+          style={{ width: "100%", marginBottom: "0.75rem" }}
+        >
+          Copy share link
+        </button>
+        <button
+          onClick={() => setStep("form")}
+          style={{ width: "100%", background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }}
+        >
+          New request
+        </button>
+      </main>
+    );
+  }
+
+  return (
+    <main className="page">
+      <h2 style={{ marginBottom: "1.5rem" }}>Request QUSDC</h2>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div>
+          <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
+            From (optional — leave blank for anyone)
+          </label>
+          <input
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            placeholder="bob.qie or 0x..."
+          />
+        </div>
+        <div>
+          <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
+            Amount (USD)
+          </label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0.00"
+          />
+        </div>
+        <div>
+          <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
+            Memo (optional)
+          </label>
+          <input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="What for?" maxLength={31} />
+        </div>
+        {error !== null && <p className="text-error">{error}</p>}
+        <button
+          onClick={() => { void handleCreate(); }}
+          disabled={!amount.trim() || isLoading}
+          style={{ width: "100%" }}
+        >
+          {isLoading ? <span className="spinner" /> : "Create request"}
+        </button>
+      </div>
+    </main>
+  );
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@qevie/paymaster-service",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node --import tsx/esm src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "test": "echo 'paymaster-service: no tests yet'"
+  },
+  "dependencies": {
+    "@qevie/sdk": "workspace:*",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0"
+  }
+}

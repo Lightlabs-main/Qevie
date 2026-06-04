@@ -56,8 +56,25 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
 -> Phase 6 Mainnet deploy + verify -> Phase 7 Ship.
 
 ## Status / Handoff (keep current)
-- Current phase: Phase 1 — AA core on testnet (EntryPoint/factory deployed; direct handleOps smoke passed)
+- Current phase: Phase 5 complete — App, SDK, Paymaster, and Payment contracts built and tested
+- 4337 vs relayer decision: ERC-4337 via Voltaire unsafe/no-trace bundler (direct handleOps smoke test confirmed on testnet)
 - Verified addresses: see VERIFICATION.md
-- 4337 vs relayer decision: PENDING until a real bundler submits a UserOperation on QIE testnet
-- Open blockers: public RPC tracing unsupported, real bundler compatibility unproven, QIE Pass on-chain contract/SDK unavailable
-- Next action: start Voltaire unsafe/no-trace bundler and submit a UserOperation through bundler RPC for the GO/NO-GO checkpoint
+- Open blockers: 
+  - Phase 2-3 contracts not yet deployed on testnet (run DeployAll.s.sol with funded key)
+  - Paymaster needs funded EntryPoint deposit before gasless ops work
+  - QIE Pass on-chain gating unavailable; using QIE Domain + signed allowlist fallback
+  - Real bundler (Voltaire) E2E not yet tested through full UserOp lifecycle
+- What is built and tested:
+  - Contracts: QevieSmartAccount, Factory, QeviePaymaster (Mode A + B), BatchPayments, 
+    PaymentRequest, SubscriptionManager, UsernameRegistry — 44 tests all passing
+  - SDK: @qevie/sdk core + React hooks — builds ESM+CJS, typechecks clean
+  - App: React PWA with all pages (Onboarding, Home, Send, Request, Scan, Batch, 
+    Subscriptions, Dashboard, Profile, PayLink) — typechecks clean
+  - paymaster-service: allowlist token API + subscription keeper — typechecks clean
+  - infra: Voltaire bundler docker-compose (unsafe mode)
+- Next action: 
+  1. Deploy Phase 2-3 contracts on testnet with funded deployer
+  2. Fund paymaster EntryPoint deposit
+  3. Run Voltaire bundler + end-to-end gasless UserOp test
+  4. Phase 6: Redeploy audited contracts to mainnet 1990
+  5. Phase 7: Ship — fund mainnet paymaster, set trusted signer, launch app

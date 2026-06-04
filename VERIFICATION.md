@@ -201,3 +201,48 @@ Result:
 This proves the Phase 1 AA core path on QIE testnet: EntryPoint v0.7, counterfactual account deployment via factory `initCode`, owner signature validation, and account execution through `handleOps`.
 
 This does not yet prove paymaster-funded gasless stablecoin payment. Paymaster work starts in Phase 2.
+
+## Phase 2-5 Build Progress
+
+Date: 2026-06-04
+
+### New contracts built (not yet deployed; pending testnet deployment)
+
+| Contract | File | Status |
+| --- | --- | --- |
+| QeviePaymaster | contracts/src/paymaster/QeviePaymaster.sol | Built, 22 tests passing |
+| BatchPayments | contracts/src/payments/BatchPayments.sol | Built, 3 tests passing |
+| PaymentRequest | contracts/src/payments/PaymentRequest.sol | Built, 4 tests passing |
+| SubscriptionManager | contracts/src/subscriptions/SubscriptionManager.sol | Built, 4 tests passing |
+| UsernameRegistry | contracts/src/registry/UsernameRegistry.sol | Built, 6 tests passing |
+
+Total Foundry tests: 44 passed, 0 failed.
+
+### SDK
+
+`@qevie/sdk` built as ESM + CJS + TypeScript declarations. Core surface: `createQevieClient`, `QevieAccount`, `BundlerClient`, payment/batch/subscription/username/link/QR methods. React hooks subpackage (`@qevie/sdk/react`) includes `QevieProvider`, `useQevieAccount`, `useQevieClient`.
+
+### App
+
+React PWA at `app/` with all pages: Onboarding, Home, Send, Request, Scan, BatchPay, Subscriptions, Dashboard, Profile, PayLink. TypeScript strict, no errors.
+
+### paymaster-service
+
+HTTP API + subscription keeper at `paymaster-service/`. Provides `POST /allowlist-token` (Sybil-gated Mode B token) and runs keeper loop for due subscription charges.
+
+### Deployment blockers (must resolve before Phase 6 mainnet deploy)
+
+1. Run `contracts/script/DeployAll.s.sol` on testnet with:
+   - `ENTRYPOINT_ADDRESS=0xa07d2Ff33400fbE2c741385cb959D5BCbA041493`
+   - `QUSDC_ADDRESS=0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5`
+   - `WQIE_ADDRESS=0x0087904D95BEe9E5F24dc8852804b547981A9139`
+   - `DEX_PAIR_ADDRESS=0x73a3cCF7da7e473ed2e9994aE764f0E30f4e4DFe`
+   - `TRUSTED_SIGNER_ADDRESS=<paymaster-service signing key address>`
+
+2. Fund `QeviePaymaster` EntryPoint deposit: `entryPoint.depositTo{value: 1 ether}(paymasterAddress)`.
+
+3. Test Mode B allowlist token issuance via paymaster-service API.
+
+4. Run full end-to-end gasless transfer: user → bundler RPC → EntryPoint → paymaster → QUSDC transfer.
+
+5. After testnet validation, redeploy on mainnet 1990 and record all addresses here.

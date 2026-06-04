@@ -2,10 +2,10 @@
   "name": "@qevie/contracts",
   "private": true,
   "scripts": {
-    "build": "forge build --offline",
-    "typecheck": "forge build --offline",
-    "lint": "forge fmt --check && forge lint",
-    "format": "forge fmt",
-    "test": "forge test --offline --force"
+    "build": "PATH=$HOME/.foundry/bin:$PATH forge build --offline",
+    "typecheck": "PATH=$HOME/.foundry/bin:$PATH forge build --offline",
+    "lint": "PATH=$HOME/.foundry/bin:$PATH forge fmt --check",
+    "format": "PATH=$HOME/.foundry/bin:$PATH forge fmt",
+    "test": "PATH=$HOME/.foundry/bin:$PATH forge test --offline --force"
   }
 }
