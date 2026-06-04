@@ -1,0 +1,20 @@
+services:
+  qevie-bundler:
+    image: ghcr.io/candidelabs/voltaire/voltaire-bundler:latest
+    command:
+      - "--bundler_secret"
+      - "${BUNDLER_SECRET:?set BUNDLER_SECRET}"
+      - "--rpc_url"
+      - "0.0.0.0"
+      - "--rpc_port"
+      - "${BUNDLER_PORT:-4337}"
+      - "--ethereum_node_url"
+      - "${QIE_TESTNET_RPC:-https://rpc1testnet.qie.digital/}"
+      - "--chain_id"
+      - "1983"
+      - "--verbose"
+      - "--unsafe"
+      - "--disable_p2p"
+    ports:
+      - "${BUNDLER_PORT:-4337}:${BUNDLER_PORT:-4337}"
+    restart: unless-stopped

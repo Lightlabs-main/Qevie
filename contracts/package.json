@@ -1,0 +1,11 @@
+{
+  "name": "@qevie/contracts",
+  "private": true,
+  "scripts": {
+    "build": "forge build --offline",
+    "typecheck": "forge build --offline",
+    "lint": "forge fmt --check && forge lint",
+    "format": "forge fmt",
+    "test": "forge test --offline --force"
+  }
+}
