@@ -1,4 +1,12 @@
-import { useState, useCallback, useEffect } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useContext,
+  createContext,
+  type ReactNode,
+} from "react";
+import React from "react";
 import type { Address, Hex } from "viem";
 import { useQevieClient } from "@qevie/sdk/react";
 import type { QevieSigner } from "@qevie/sdk";
@@ -8,17 +16,13 @@ interface WalletState {
   signerAddress: Address | null;
   isConnecting: boolean;
   error: string | null;
-}
-
-interface WalletActions {
+  signer: QevieSigner | null;
   connect(): Promise<void>;
   disconnect(): void;
-  signer: QevieSigner | null;
 }
 
-const LOCAL_STORAGE_KEY = "qevie_signer_address";
+const WalletContext = createContext<WalletState | null>(null);
 
-/** Build a QevieSigner from the browser's injected EIP-1193 provider. */
 function buildEip1193Signer(provider: unknown): QevieSigner {
   const p = provider as {
     request(args: { method: string; params?: unknown[] }): Promise<unknown>;
@@ -37,43 +41,40 @@ function buildEip1193Signer(provider: unknown): QevieSigner {
         typeof message === "string"
           ? message
           : `0x${Buffer.from(message).toString("hex")}`;
-      const sig = (await p.request({
-        method: "personal_sign",
-        params: [data, addr],
-      })) as Hex;
-      return sig;
+      return (await p.request({ method: "personal_sign", params: [data, addr] })) as Hex;
     },
   };
 }
 
-export function useWallet(): WalletState & WalletActions {
+const LOCAL_STORAGE_KEY = "qevie_signer_address";
+
+export function WalletProvider({ children }: { children: ReactNode }): React.ReactElement {
   const client = useQevieClient();
 
-  const [signerState, setSignerState] = useState<{
-    signer: QevieSigner | null;
-    signerAddress: Address | null;
-  }>({ signer: null, signerAddress: null });
-
+  const [signer, setSigner] = useState<QevieSigner | null>(null);
+  const [signerAddress, setSignerAddress] = useState<Address | null>(null);
   const [address, setAddress] = useState<Address | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const connect = useCallback(async () => {
-    const win = window as typeof window & { ethereum?: unknown };
-    if (win.ethereum === undefined) {
-      setError("No Web3 wallet detected. Please install QIE Wallet or MetaMask.");
-      return;
-    }
-
     setIsConnecting(true);
     setError(null);
 
-    try {
-      const signer = buildEip1193Signer(win.ethereum);
-      const signerAddr = await signer.getAddress();
-      const smartAddr = await client.getSmartAccountAddress(signer);
+    const win = window as typeof window & { ethereum?: unknown };
+    if (win.ethereum === undefined) {
+      setError("No Web3 wallet detected. Please install QIE Wallet or MetaMask.");
+      setIsConnecting(false);
+      return;
+    }
 
-      setSignerState({ signer, signerAddress: signerAddr });
+    try {
+      const s = buildEip1193Signer(win.ethereum);
+      const signerAddr = await s.getAddress();
+      const smartAddr = await client.getSmartAccountAddress(s);
+
+      setSigner(s);
+      setSignerAddress(signerAddr);
       setAddress(smartAddr);
       localStorage.setItem(LOCAL_STORAGE_KEY, signerAddr);
     } catch (e) {
@@ -84,32 +85,38 @@ export function useWallet(): WalletState & WalletActions {
   }, [client]);
 
   const disconnect = useCallback(() => {
-    setSignerState({ signer: null, signerAddress: null });
+    setSigner(null);
+    setSignerAddress(null);
     setAddress(null);
+    setError(null);
     localStorage.removeItem(LOCAL_STORAGE_KEY);
   }, []);
 
-  // Auto-reconnect if previously connected.
+  // Auto-reconnect on mount if previously connected.
   useEffect(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (saved !== null) {
       const win = window as typeof window & { ethereum?: unknown };
       if (win.ethereum !== undefined) {
         connect().catch(() => {
-          // Auto-reconnect failed silently; user can reconnect manually.
+          localStorage.removeItem(LOCAL_STORAGE_KEY);
         });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return {
-    address,
-    signerAddress: signerState.signerAddress,
-    signer: signerState.signer,
-    isConnecting,
-    error,
-    connect,
-    disconnect,
-  };
+  return React.createElement(
+    WalletContext.Provider,
+    { value: { address, signerAddress, signer, isConnecting, error, connect, disconnect } },
+    children,
+  );
+}
+
+export function useWallet(): WalletState {
+  const ctx = useContext(WalletContext);
+  if (ctx === null) {
+    throw new Error("useWallet must be used inside <WalletProvider>");
+  }
+  return ctx;
 }

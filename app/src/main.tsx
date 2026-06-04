@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { QevieProvider } from "@qevie/sdk/react";
 import { APP_CONFIG } from "./config.js";
+import { WalletProvider } from "./hooks/useWallet.js";
 import App from "./App.js";
 import "./index.css";
 
@@ -13,7 +14,9 @@ ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <QevieProvider config={APP_CONFIG}>
       <BrowserRouter>
-        <App />
+        <WalletProvider>
+          <App />
+        </WalletProvider>
       </BrowserRouter>
     </QevieProvider>
   </React.StrictMode>,

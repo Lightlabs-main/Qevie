@@ -1,15 +1,12 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
 import { useWallet } from "../hooks/useWallet.js";
 
 export default function Onboarding(): React.ReactElement {
   const { connect, isConnecting, error } = useWallet();
-  const navigate = useNavigate();
 
-  async function handleConnect(): Promise<void> {
-    await connect();
-    navigate("/");
-  }
+  // Routing is handled by App.tsx watching address state.
+  // No navigate() needed here — when connect() succeeds, address
+  // becomes non-null and App.tsx automatically shows the home screen.
 
   return (
     <div
@@ -58,7 +55,7 @@ export default function Onboarding(): React.ReactElement {
         </ul>
 
         <button
-          onClick={() => { void handleConnect(); }}
+          onClick={() => { void connect(); }}
           disabled={isConnecting}
           style={{ width: "100%" }}
         >
