@@ -267,7 +267,12 @@ export class QevieClient {
       0n,
       regCallData,
     );
-    return this._submitOp(acc, callData, "qusdc");
+    // Username registration is usually a brand-new account's first action, so
+    // prefer sponsored (gasless) mode; fall back to QUSDC-pay if not eligible.
+    const token = await this.getAllowlistToken(await acc.getAddress());
+    return token !== null
+      ? this._submitOp(acc, callData, "sponsored", token)
+      : this._submitOp(acc, callData, "qusdc");
   }
 
   // ---------------------------------------------------------------------------
