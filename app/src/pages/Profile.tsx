@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
-import { buildPaymentUri } from "@qevie/sdk";
+import { USERNAME_REGISTRY_ABI, buildPaymentUri } from "@qevie/sdk";
 import { QRCodeSVG } from "qrcode.react";
 
 export default function Profile(): React.ReactElement {
@@ -12,8 +12,30 @@ export default function Profile(): React.ReactElement {
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [registered, setRegistered] = useState(false);
+  const [registeredUsername, setRegisteredUsername] = useState<string | null>(null);
 
-  const receiveUri = address ? buildPaymentUri({ to: address }) : null;
+  const receiveTarget = registeredUsername ?? address;
+  const receiveUri = receiveTarget ? buildPaymentUri({ to: receiveTarget }) : null;
+  const copyValue = registeredUsername ?? receiveUri;
+
+  useEffect(() => {
+    if (address === null) return;
+
+    let cancelled = false;
+    client.publicClient.readContract({
+      address: client.config.contracts.usernameRegistry,
+      abi: USERNAME_REGISTRY_ABI,
+      functionName: "reverseResolve",
+      args: [address],
+    }).then((stored) => {
+      if (cancelled || typeof stored !== "string" || stored.length === 0) return;
+      setUsername(stored);
+      setRegisteredUsername(stored);
+      setRegistered(true);
+    }).catch(() => {});
+
+    return () => { cancelled = true; };
+  }, [address, client]);
 
   async function handleRegister(): Promise<void> {
     if (signer === null) { setError("Wallet not connected"); return; }
@@ -28,6 +50,7 @@ export default function Profile(): React.ReactElement {
 
     try {
       await client.registerUsername(signer, clean);
+      setRegisteredUsername(clean);
       setRegistered(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Registration failed");
@@ -43,13 +66,18 @@ export default function Profile(): React.ReactElement {
       {/* QR for receiving */}
       {receiveUri !== null && (
         <div className="card" style={{ marginBottom: "1.5rem", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
-          <p style={{ fontWeight: 600 }}>Your receive QR</p>
+          <p style={{ fontWeight: 600 }}>
+            {registeredUsername !== null ? "Receive as username" : "Receive at smart account"}
+          </p>
+          <p className="text-muted" style={{ fontSize: "0.8125rem", textAlign: "center", maxWidth: 260 }}>
+            {registeredUsername !== null ? registeredUsername : address}
+          </p>
           <QRCodeSVG value={receiveUri} size={180} bgColor="transparent" fgColor="var(--text)" />
           <button
-            onClick={() => { void navigator.clipboard.writeText(receiveUri); }}
+            onClick={() => { if (copyValue !== null) void navigator.clipboard.writeText(copyValue); }}
             style={{ background: "transparent", color: "var(--accent-light)", border: "1px solid var(--border)", padding: "0.4rem 1rem", fontSize: "0.875rem" }}
           >
-            Copy URI
+            {registeredUsername !== null ? "Copy username" : "Copy URI"}
           </button>
         </div>
       )}
@@ -81,7 +109,7 @@ export default function Profile(): React.ReactElement {
             </button>
           </>
         ) : (
-          <p className="text-success">You are registered as <strong>{username}</strong>.</p>
+          <p className="text-success">You are registered as <strong>{registeredUsername ?? username}</strong>.</p>
         )}
       </div>
     </main>

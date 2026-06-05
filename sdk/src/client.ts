@@ -257,6 +257,7 @@ export class QevieClient {
 
   async registerUsername(signer: QevieSigner, username: string): Promise<UserOpResult> {
     const acc = this.account(signer);
+    const smartAccount = await acc.getAddress();
     const regCallData = encodeFunctionData({
       abi: USERNAME_REGISTRY_ABI,
       functionName: "register",
@@ -269,10 +270,21 @@ export class QevieClient {
     );
     // Username registration is usually a brand-new account's first action, so
     // prefer sponsored (gasless) mode; fall back to QUSDC-pay if not eligible.
-    const token = await this.getAllowlistToken(await acc.getAddress());
-    return token !== null
-      ? this._submitOp(acc, callData, "sponsored", token)
-      : this._submitOp(acc, callData, "qusdc");
+    const token = await this.getAllowlistToken(smartAccount);
+    const mode: GasMode = token !== null ? "sponsored" : "qusdc";
+    const op = await acc.buildAndSign(callData, mode, DEFAULT_GAS, token ?? undefined);
+    const userOpHash = await this.bundler.sendUserOperation(op, this.config.contracts.entryPoint);
+
+    // Voltaire on QIE can accept and mine the UserOperation before its receipt
+    // indexer returns data. Username registration has a direct on-chain success
+    // signal, so use the registry as confirmation instead of blocking on the
+    // bundler receipt endpoint.
+    const confirmed = await this._waitForRegisteredUsername(smartAccount, username);
+    if (confirmed) {
+      return { userOpHash, txHash: null, status: "mined", blockNumber: null };
+    }
+
+    return this.bundler.waitForUserOp(userOpHash, 10, 2000);
   }
 
   // ---------------------------------------------------------------------------
@@ -349,6 +361,28 @@ export class QevieClient {
       functionName: "execute",
       args: [target, value, data],
     });
+  }
+
+  private async _waitForRegisteredUsername(
+    account: Address,
+    username: string,
+    maxAttempts = 30,
+    intervalMs = 2000,
+  ): Promise<boolean> {
+    for (let i = 0; i < maxAttempts; i++) {
+      const stored = await this.publicClient.readContract({
+        address: this.config.contracts.usernameRegistry,
+        abi: USERNAME_REGISTRY_ABI,
+        functionName: "reverseResolve",
+        args: [account],
+      }) as string;
+
+      if (stored === username) return true;
+      if (i < maxAttempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+    }
+    return false;
   }
 
   private _memoToBytes32(memo: string): Hex {
