@@ -5,11 +5,11 @@ const SCHEME = "qevie";
 /**
  * qevie: URI scheme for payment links and QR codes.
  *
- * Format: qevie:<recipient>[?amount=<6dec>&memo=<str>&expiry=<unix>&id=<linkId>]
+ * Format: qevie:<recipient>[?amount=<6dec>&memo=<str>&expiry=<unix>&maxUses=<n>&id=<linkId>]
  *
  * Examples:
  *   qevie:alice_qie?amount=5000000&memo=lunch
- *   qevie:0xABCD...?amount=1000000
+ *   qevie:0xABCD...?amount=1000000&maxUses=3&expiry=1780000000
  *   qevie:bob.qie
  */
 export function buildPaymentUri(params: PaymentLinkParams): string {
@@ -26,6 +26,9 @@ export function buildPaymentUri(params: PaymentLinkParams): string {
     const expiry = Math.floor(Date.now() / 1000) + params.expirySeconds;
     query.set("expiry", expiry.toString());
   }
+  if (params.maxUses !== undefined && params.maxUses > 0) {
+    query.set("maxUses", params.maxUses.toString());
+  }
 
   const qs = query.toString();
   return qs ? `${base}?${qs}` : base;
@@ -35,7 +38,7 @@ export function buildPaymentUri(params: PaymentLinkParams): string {
 export function parsePaymentUri(uri: string): ParsedPaymentLink | null {
   let raw = uri.trim();
 
-  // Extract from https link if embedded as a fragment or path.
+  // Extract from https link if embedded as a query param or fragment.
   if (raw.startsWith("https://") || raw.startsWith("http://")) {
     try {
       const url = new URL(raw);
@@ -63,6 +66,8 @@ export function parsePaymentUri(uri: string): ParsedPaymentLink | null {
     if (memo !== null) result.memo = memo;
     const expiry = params.get("expiry");
     if (expiry !== null) result.expiry = Number(expiry);
+    const maxUses = params.get("maxUses");
+    if (maxUses !== null) result.maxUses = Number(maxUses);
     const id = params.get("id");
     if (id !== null) result.linkId = id;
   }

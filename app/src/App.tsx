@@ -5,7 +5,7 @@ import { useWallet } from "./hooks/useWallet.js";
 
 const Home = lazy(() => import("./pages/Home.js"));
 const Send = lazy(() => import("./pages/Send.js"));
-const Request = lazy(() => import("./pages/Request.js"));
+const PaymentLinks = lazy(() => import("./pages/PaymentLinks.js"));
 const Scan = lazy(() => import("./pages/Scan.js"));
 const Subscriptions = lazy(() => import("./pages/Subscriptions.js"));
 const Dashboard = lazy(() => import("./pages/Dashboard.js"));
@@ -16,8 +16,8 @@ const BatchPay = lazy(() => import("./pages/BatchPay.js"));
 
 function LoadingPage(): React.ReactElement {
   return (
-    <div className="page" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "50vh" }}>
-      <span className="spinner" />
+    <div className="flex-center" style={{ minHeight: "60vh" }}>
+      <span className="spinner spinner-lg" />
     </div>
   );
 }
@@ -43,7 +43,7 @@ export default function App(): React.ReactElement {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/send" element={<Send />} />
-          <Route path="/request" element={<Request />} />
+          <Route path="/links" element={<PaymentLinks />} />
           <Route path="/scan" element={<Scan />} />
           <Route path="/batch" element={<BatchPay />} />
           <Route path="/subscriptions" element={<Subscriptions />} />

@@ -115,13 +115,18 @@ export interface PaymentLinkParams {
   amount?: bigint;
   memo?: string;
   expirySeconds?: number;
+  /** Maximum number of times this link may be paid. Undefined = unlimited. */
+  maxUses?: number;
 }
 
 export interface ParsedPaymentLink {
   to: string;
   amount?: bigint;
   memo?: string;
+  /** Unix timestamp (seconds) when the link expires. */
   expiry?: number;
+  /** Maximum number of times the link may be paid. */
+  maxUses?: number;
   linkId?: string;
 }
 
