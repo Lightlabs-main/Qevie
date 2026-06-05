@@ -1,89 +1,113 @@
 import React, { useState } from "react";
 import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
+import { gaslessParams } from "../lib/gasless.js";
+
+const PERIOD_PRESETS = [
+  { label: "Daily", days: 1 },
+  { label: "Weekly", days: 7 },
+  { label: "Monthly", days: 30 },
+];
 
 export default function Subscriptions(): React.ReactElement {
   const client = useQevieClient();
-  const { signer } = useWallet();
+  const { signer, address } = useWallet();
 
   const [payee, setPayee] = useState("");
   const [amount, setAmount] = useState("");
-  const [period, setPeriod] = useState("30");
+  const [periodDays, setPeriodDays] = useState(30);
   const [maxPayments, setMaxPayments] = useState("12");
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubscribe(): Promise<void> {
-    if (signer === null) { setError("Wallet not connected"); return; }
-    setIsLoading(true);
-    setError(null);
-
+  const handleSubscribe = async (): Promise<void> => {
+    if (signer === null || address === null) { setError("Wallet not connected"); return; }
+    setLoading(true); setError(null);
     try {
+      const gas = await gaslessParams(client, address);
       await client.subscribe(signer, {
         payee: payee.trim(),
-        amount: BigInt(Math.round(Number(amount) * 1e6)),
-        period: Number(period) * 86400,
-        maxPayments: Number(maxPayments),
-        mode: "qusdc",
+        amount: BigInt(Math.round(parseFloat(amount) * 1e6)),
+        period: periodDays * 86400,
+        maxPayments: parseInt(maxPayments),
+        ...gas,
       });
       setSuccess(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create subscription");
-    } finally {
-      setIsLoading(false);
-    }
-  }
+    } finally { setLoading(false); }
+  };
 
   if (success) {
     return (
-      <main className="page">
-        <h2 style={{ marginBottom: "1.5rem" }}>Subscription created ✓</h2>
-        <div className="card text-success" style={{ marginBottom: "1rem" }}>
-          <p>Your recurring payment has been set up. The keeper will auto-charge on schedule.</p>
+      <main className="page fade-in">
+        <div style={{ textAlign: "center", paddingTop: "2rem" }}>
+          <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>🔄</div>
+          <h1 style={{ marginBottom: "0.5rem" }}>Subscription active!</h1>
+          <p className="text-muted" style={{ maxWidth: 300, margin: "0 auto" }}>
+            ${parseFloat(amount).toFixed(2)} will be charged every {periodDays} day{periodDays === 1 ? "" : "s"}, automatically and gaslessly.
+          </p>
+          <button className="btn-secondary btn-lg" onClick={() => { setSuccess(false); setPayee(""); setAmount(""); }} style={{ marginTop: "2rem" }}>
+            Create another
+          </button>
         </div>
-        <button onClick={() => setSuccess(false)} style={{ width: "100%" }}>
-          Set up another
-        </button>
       </main>
     );
   }
 
+  const totalCommitment = (parseFloat(amount) || 0) * (parseInt(maxPayments) || 0);
+
   return (
-    <main className="page">
-      <h2 style={{ marginBottom: "1.5rem" }}>Recurring Payment</h2>
+    <main className="page fade-in">
+      <div className="page-header">
+        <h2 className="page-title">Recurring Payment</h2>
+      </div>
+      <p className="text-muted mb-4" style={{ fontSize: "0.8125rem" }}>
+        Authorize automatic QUSDC payments on a schedule. Cancel anytime.
+      </p>
+
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        <div>
-          <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
-            Pay to
-          </label>
-          <input value={payee} onChange={(e) => setPayee(e.target.value)} placeholder="address or username" />
+        <div className="input-group">
+          <label className="input-label">Pay to</label>
+          <input value={payee} onChange={(e) => setPayee(e.target.value)} placeholder="address or username" autoCapitalize="none" />
         </div>
-        <div>
-          <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
-            Amount per period (USD)
-          </label>
-          <input type="number" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+
+        <div className="input-group">
+          <label className="input-label">Amount per cycle</label>
+          <div style={{ position: "relative" }}>
+            <input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" style={{ paddingRight: "5rem" }} />
+            <span className="input-suffix">QUSDC</span>
+          </div>
         </div>
-        <div>
-          <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
-            Period (days)
-          </label>
-          <input type="number" min="1" value={period} onChange={(e) => setPeriod(e.target.value)} />
+
+        <div className="input-group">
+          <label className="input-label">Frequency</label>
+          <div className="toggle-group">
+            {PERIOD_PRESETS.map((p) => (
+              <button key={p.days} className={`toggle-btn ${periodDays === p.days ? "active" : ""}`} onClick={() => setPeriodDays(p.days)}>
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div>
-          <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
-            Max payments
-          </label>
+
+        <div className="input-group">
+          <label className="input-label">Number of payments</label>
           <input type="number" min="1" value={maxPayments} onChange={(e) => setMaxPayments(e.target.value)} />
         </div>
-        {error !== null && <p className="text-error">{error}</p>}
-        <button
-          onClick={() => { void handleSubscribe(); }}
-          disabled={!payee.trim() || !amount.trim() || isLoading}
-          style={{ width: "100%" }}
-        >
-          {isLoading ? <span className="spinner" /> : "Create subscription"}
+
+        {totalCommitment > 0 && (
+          <div className="card flex-between">
+            <span className="text-muted">Total commitment</span>
+            <span style={{ fontWeight: 700 }}>${totalCommitment.toFixed(2)}</span>
+          </div>
+        )}
+
+        {error !== null && <div className="alert alert-error">{error}</div>}
+
+        <button className="btn-primary btn-lg" onClick={() => { void handleSubscribe(); }} disabled={!payee.trim() || !amount.trim() || loading} style={{ marginTop: "0.5rem" }}>
+          {loading ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Creating…</> : "Create subscription"}
         </button>
       </div>
     </main>

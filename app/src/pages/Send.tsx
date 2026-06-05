@@ -1,54 +1,60 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import type { UserOpResult } from "@qevie/sdk";
 import { APP_CONFIG } from "../config.js";
+import { gaslessParams } from "../lib/gasless.js";
 
-type Step = "form" | "confirm" | "pending" | "done";
+const EXPLORER = APP_CONFIG.chainId === 1990
+  ? "https://mainnet.qie.digital"
+  : "https://testnet.qie.digital";
+
+type Step = "form" | "confirm" | "sending" | "done";
 
 export default function Send(): React.ReactElement {
   const client = useQevieClient();
-  const { signer } = useWallet();
-  const navigate = useNavigate();
+  const { signer, address } = useWallet();
+  const [params] = useSearchParams();
 
-  const [to, setTo] = useState("");
-  const [amount, setAmount] = useState("");
-  const [memo, setMemo] = useState("");
+  const [to, setTo] = useState(params.get("to") ?? "");
+  const [amount, setAmount] = useState(params.get("amount") ?? "");
+  const [memo, setMemo] = useState(params.get("memo") ?? "");
   const [step, setStep] = useState<Step>("form");
   const [result, setResult] = useState<UserOpResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resolvedAddr, setResolvedAddr] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(false);
 
-  async function handlePreview(): Promise<void> {
+  const handlePreview = async (): Promise<void> => {
     if (!to.trim() || !amount.trim()) return;
     setError(null);
-
+    setResolving(true);
     try {
       const addr = await client.resolve(to.trim());
       if (addr === null) {
-        setError(`Cannot resolve "${to}". Try a 0x address or registered username.`);
+        setError(`Cannot resolve "${to}". Try a wallet address or registered username.`);
         return;
       }
       setResolvedAddr(addr);
       setStep("confirm");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Resolution failed");
+    } finally {
+      setResolving(false);
     }
-  }
+  };
 
-  async function handleSend(): Promise<void> {
-    if (signer === null) { setError("Wallet not connected"); return; }
-    setStep("pending");
+  const handleSend = async (): Promise<void> => {
+    if (signer === null || address === null) { setError("Wallet not connected"); return; }
+    setStep("sending");
     setError(null);
-
     try {
-      const amountUnits = BigInt(Math.round(Number(amount) * 1e6));
+      const amountUnits = BigInt(Math.round(parseFloat(amount) * 1e6));
+      const gas = await gaslessParams(client, address);
       const res = await client.pay(signer, {
-        to: to.trim(),
-        amount: amountUnits,
-        memo: memo.trim() || undefined,
-        mode: "qusdc",
+        to: to.trim(), amount: amountUnits,
+        memo: memo.trim() || undefined, ...gas,
       });
       setResult(res);
       setStep("done");
@@ -56,63 +62,86 @@ export default function Send(): React.ReactElement {
       setError(e instanceof Error ? e.message : "Send failed");
       setStep("confirm");
     }
-  }
+  };
 
   if (step === "done" && result !== null) {
     return (
-      <main className="page">
-        <h2 style={{ marginBottom: "1.5rem" }}>Payment sent ✓</h2>
-        <div className="card text-success" style={{ marginBottom: "1rem" }}>
-          <p>Your QUSDC payment was sent successfully.</p>
-        </div>
-        {result.txHash !== null && (
-          <a
-            href={`${APP_CONFIG.chainId === 1990 ? "https://mainnet.qie.digital" : "https://testnet.qie.digital"}/tx/${result.txHash}`}
-            target="_blank"
-            rel="noreferrer"
-            style={{ display: "block", marginBottom: "1rem" }}
+      <main className="page fade-in">
+        <div style={{ textAlign: "center", paddingTop: "2rem" }}>
+          <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>✅</div>
+          <h1 style={{ marginBottom: "0.5rem" }}>Sent!</h1>
+          <p className="text-muted">Your QUSDC payment was sent successfully.</p>
+
+          {result.txHash !== null && (
+            <a
+              href={`${EXPLORER}/tx/${result.txHash}`}
+              target="_blank" rel="noreferrer"
+              className="chip chip-accent"
+              style={{ display: "inline-flex", marginTop: "1.5rem", textDecoration: "none" }}
+            >
+              View transaction →
+            </a>
+          )}
+
+          <button
+            className="btn-secondary btn-lg"
+            onClick={() => { setStep("form"); setResult(null); setTo(""); setAmount(""); setMemo(""); }}
+            style={{ marginTop: "2rem" }}
           >
-            View on QIE Explorer →
-          </a>
-        )}
-        <button onClick={() => navigate("/")} style={{ width: "100%" }}>
-          Back to Home
-        </button>
+            Send another
+          </button>
+        </div>
       </main>
     );
   }
 
-  if (step === "pending") {
+  if (step === "sending") {
     return (
-      <main className="page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "50vh" }}>
-        <span className="spinner" style={{ width: 40, height: 40, borderWidth: 3, marginBottom: "1rem" }} />
-        <p>Sending payment…</p>
-        <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.5rem" }}>
-          Submitting UserOperation to bundler
-        </p>
+      <main className="page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+        <span className="spinner spinner-lg" />
+        <p style={{ marginTop: "1.25rem", fontWeight: 600 }}>Sending payment…</p>
+        <p className="text-muted mt-2" style={{ fontSize: "0.8125rem" }}>Submitting to bundler, this may take a moment</p>
       </main>
     );
   }
 
   if (step === "confirm") {
-    const amountNum = Number(amount);
+    const amountNum = parseFloat(amount);
     return (
-      <main className="page">
-        <button
-          onClick={() => setStep("form")}
-          style={{ background: "transparent", color: "var(--text-muted)", padding: "0.5rem 0", marginBottom: "1rem" }}
-        >
-          ← Back
-        </button>
-        <h2 style={{ marginBottom: "1.5rem" }}>Confirm payment</h2>
-        <div className="card" style={{ marginBottom: "1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <Row label="To" value={resolvedAddr?.slice(0, 10) + "…" + resolvedAddr?.slice(-8)} />
-          <Row label="Amount" value={`$${amountNum.toFixed(2)} QUSDC`} />
-          {memo && <Row label="Memo" value={memo} />}
-          <Row label="Gas" value="Charged in QUSDC (gasless)" />
+      <main className="page fade-in">
+        <div className="page-header">
+          <button className="back-btn" onClick={() => setStep("form")}>←</button>
+          <h2 className="page-title">Confirm</h2>
         </div>
-        {error !== null && <p className="text-error" style={{ marginBottom: "1rem" }}>{error}</p>}
-        <button onClick={() => { void handleSend(); }} style={{ width: "100%" }}>
+
+        <div className="card mb-4">
+          <div className="row">
+            <span className="row-label">To</span>
+            <span className="row-value mono truncate" style={{ maxWidth: "60%", fontSize: "0.8rem" }}>
+              {resolvedAddr}
+            </span>
+          </div>
+          <div className="row">
+            <span className="row-label">Amount</span>
+            <span className="row-value" style={{ color: "var(--accent-light)" }}>
+              ${amountNum.toFixed(2)} QUSDC
+            </span>
+          </div>
+          {memo && (
+            <div className="row">
+              <span className="row-label">Memo</span>
+              <span className="row-value">{memo}</span>
+            </div>
+          )}
+          <div className="row">
+            <span className="row-label">Gas</span>
+            <span className="chip chip-success" style={{ fontSize: "0.75rem" }}>Paid in QUSDC</span>
+          </div>
+        </div>
+
+        {error !== null && <div className="alert alert-error mb-3">{error}</div>}
+
+        <button className="btn-primary btn-lg" onClick={() => { void handleSend(); }}>
           Send ${amountNum.toFixed(2)} QUSDC
         </button>
       </main>
@@ -120,62 +149,58 @@ export default function Send(): React.ReactElement {
   }
 
   return (
-    <main className="page">
-      <h2 style={{ marginBottom: "1.5rem" }}>Send QUSDC</h2>
+    <main className="page fade-in">
+      <div className="page-header">
+        <h2 className="page-title">Send QUSDC</h2>
+      </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        <div>
-          <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
-            To (address, username, or name.qie)
-          </label>
+        <div className="input-group">
+          <label className="input-label">To</label>
           <input
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            placeholder="alice.qie or 0x..."
-            autoComplete="off"
+            placeholder="address, username, or name.qie"
+            autoCapitalize="none"
+            spellCheck={false}
           />
         </div>
-        <div>
-          <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
-            Amount (USD)
-          </label>
-          <input
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.00"
-          />
+
+        <div className="input-group">
+          <label className="input-label">Amount (USD)</label>
+          <div className="input-with-suffix" style={{ position: "relative" }}>
+            <input
+              type="number" min="0.01" step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+              style={{ paddingRight: "5rem" }}
+            />
+            <span className="input-suffix">QUSDC</span>
+          </div>
         </div>
-        <div>
-          <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
-            Memo (optional)
-          </label>
+
+        <div className="input-group">
+          <label className="input-label">Memo <span className="text-dim">(optional)</span></label>
           <input
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
-            placeholder="Coffee ☕"
+            placeholder="What's this for?"
             maxLength={31}
           />
         </div>
-        {error !== null && <p className="text-error">{error}</p>}
+
+        {error !== null && <div className="alert alert-error">{error}</div>}
+
         <button
+          className="btn-primary btn-lg"
           onClick={() => { void handlePreview(); }}
-          disabled={!to.trim() || !amount.trim()}
-          style={{ width: "100%" }}
+          disabled={!to.trim() || !amount.trim() || resolving}
+          style={{ marginTop: "0.5rem" }}
         >
-          Preview
+          {resolving ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Resolving…</> : "Preview"}
         </button>
       </div>
     </main>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string | undefined }): React.ReactElement {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <span className="text-muted">{label}</span>
-      <span style={{ fontWeight: 600 }}>{value}</span>
-    </div>
   );
 }

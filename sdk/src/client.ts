@@ -76,6 +76,29 @@ export class QevieClient {
     return this.account(signer, salt).getAddress();
   }
 
+  /**
+   * Request a Mode B (sponsored / gasless) allowlist token for a smart account
+   * from the paymaster-service. Returns null if the account is not eligible
+   * (e.g. no .qie domain and not manually allowlisted) or the service is down.
+   */
+  async getAllowlistToken(smartAccountAddress: Address): Promise<AllowlistToken | null> {
+    try {
+      const res = await fetch(`${this.config.paymasterServiceUrl}/allowlist-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: smartAccountAddress }),
+      });
+      if (!res.ok) return null;
+      const token = (await res.json()) as AllowlistToken;
+      if (typeof token.expiry !== "number" || typeof token.signature !== "string") {
+        return null;
+      }
+      return token;
+    } catch {
+      return null;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Resolution
   // ---------------------------------------------------------------------------

@@ -3,148 +3,115 @@ import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import type { UserOpResult } from "@qevie/sdk";
 import { APP_CONFIG } from "../config.js";
+import { gaslessParams } from "../lib/gasless.js";
 
-interface RecipientRow {
-  to: string;
-  amount: string;
-}
+const EXPLORER = APP_CONFIG.chainId === 1990
+  ? "https://mainnet.qie.digital"
+  : "https://testnet.qie.digital";
+
+interface Row { to: string; amount: string; }
 
 export default function BatchPay(): React.ReactElement {
   const client = useQevieClient();
-  const { signer } = useWallet();
+  const { signer, address } = useWallet();
 
-  const [rows, setRows] = useState<RecipientRow[]>([{ to: "", amount: "" }]);
+  const [rows, setRows] = useState<Row[]>([{ to: "", amount: "" }]);
   const [memo, setMemo] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<UserOpResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function addRow(): void {
-    setRows((prev) => [...prev, { to: "", amount: "" }]);
-  }
+  const addRow = (): void => setRows((p) => [...p, { to: "", amount: "" }]);
+  const removeRow = (i: number): void => setRows((p) => p.filter((_, idx) => idx !== i));
+  const update = (i: number, field: keyof Row, val: string): void =>
+    setRows((p) => p.map((r, idx) => (idx === i ? { ...r, [field]: val } : r)));
 
-  function removeRow(i: number): void {
-    setRows((prev) => prev.filter((_, idx) => idx !== i));
-  }
+  const total = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  const validRows = rows.filter((r) => r.to.trim() && parseFloat(r.amount) > 0);
 
-  function updateRow(i: number, field: keyof RecipientRow, value: string): void {
-    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
-  }
-
-  const totalAmount = rows.reduce((sum, r) => {
-    const n = Number(r.amount);
-    return sum + (isNaN(n) ? 0 : n);
-  }, 0);
-
-  async function handleSend(): Promise<void> {
-    if (signer === null) { setError("Wallet not connected"); return; }
-    const valid = rows.filter((r) => r.to.trim() && Number(r.amount) > 0);
-    if (valid.length === 0) { setError("Add at least one valid recipient"); return; }
-
-    setIsLoading(true);
-    setError(null);
-
+  const handleSend = async (): Promise<void> => {
+    if (signer === null || address === null) { setError("Wallet not connected"); return; }
+    if (validRows.length === 0) { setError("Add at least one valid recipient"); return; }
+    setLoading(true); setError(null);
     try {
+      const gas = await gaslessParams(client, address);
       const res = await client.batchPay(signer, {
-        recipients: valid.map((r) => ({
-          to: r.to.trim(),
-          amount: BigInt(Math.round(Number(r.amount) * 1e6)),
-        })),
-        memo: memo.trim() || undefined,
-        mode: "qusdc",
+        recipients: validRows.map((r) => ({ to: r.to.trim(), amount: BigInt(Math.round(parseFloat(r.amount) * 1e6)) })),
+        memo: memo.trim() || undefined, ...gas,
       });
       setResult(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Batch payment failed");
-    } finally {
-      setIsLoading(false);
-    }
-  }
+    } finally { setLoading(false); }
+  };
 
   if (result !== null) {
     return (
-      <main className="page">
-        <h2 style={{ marginBottom: "1.5rem" }}>Batch sent ✓</h2>
-        <div className="card text-success" style={{ marginBottom: "1rem" }}>
-          <p>Batch payment of ${totalAmount.toFixed(2)} QUSDC sent successfully.</p>
+      <main className="page fade-in">
+        <div style={{ textAlign: "center", paddingTop: "2rem" }}>
+          <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>✅</div>
+          <h1 style={{ marginBottom: "0.5rem" }}>Batch sent!</h1>
+          <p className="text-muted">${total.toFixed(2)} QUSDC to {validRows.length} recipients</p>
+          {result.txHash !== null && (
+            <a href={`${EXPLORER}/tx/${result.txHash}`} target="_blank" rel="noreferrer"
+              className="chip chip-accent" style={{ display: "inline-flex", marginTop: "1.5rem", textDecoration: "none" }}>
+              View transaction →
+            </a>
+          )}
+          <button className="btn-secondary btn-lg" onClick={() => { setResult(null); setRows([{ to: "", amount: "" }]); }} style={{ marginTop: "2rem" }}>
+            New batch
+          </button>
         </div>
-        {result.txHash !== null && (
-          <a
-            href={`${APP_CONFIG.chainId === 1990 ? "https://mainnet.qie.digital" : "https://testnet.qie.digital"}/tx/${result.txHash}`}
-            target="_blank"
-            rel="noreferrer"
-            style={{ display: "block", marginBottom: "1rem" }}
-          >
-            View on QIE Explorer →
-          </a>
-        )}
-        <button onClick={() => setResult(null)} style={{ width: "100%" }}>
-          New batch
-        </button>
       </main>
     );
   }
 
   return (
-    <main className="page">
-      <h2 style={{ marginBottom: "1.5rem" }}>Batch Payment</h2>
+    <main className="page fade-in">
+      <div className="page-header">
+        <h2 className="page-title">Batch Payment</h2>
+      </div>
+      <p className="text-muted mb-4" style={{ fontSize: "0.8125rem" }}>
+        Pay multiple recipients in one gasless transaction.
+      </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem", marginBottom: "1rem" }}>
         {rows.map((row, i) => (
-          <div key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <input
-              value={row.to}
-              onChange={(e) => updateRow(i, "to", e.target.value)}
-              placeholder="Recipient"
-              style={{ flex: 2 }}
-            />
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={row.amount}
-              onChange={(e) => updateRow(i, "amount", e.target.value)}
-              placeholder="USD"
-              style={{ flex: 1 }}
-            />
+          <div key={i} className="card" style={{ padding: "0.75rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontWeight: 700, width: 18 }}>{i + 1}</span>
+            <input value={row.to} onChange={(e) => update(i, "to", e.target.value)} placeholder="Recipient"
+              autoCapitalize="none" style={{ flex: 2, padding: "0.6rem 0.75rem" }} />
+            <input type="number" min="0.01" step="0.01" value={row.amount}
+              onChange={(e) => update(i, "amount", e.target.value)} placeholder="0.00"
+              style={{ flex: 1, padding: "0.6rem 0.75rem" }} />
             {rows.length > 1 && (
-              <button
-                onClick={() => removeRow(i)}
-                style={{ background: "transparent", color: "var(--error)", padding: "0.5rem", minWidth: 0 }}
-              >
-                ✕
-              </button>
+              <button onClick={() => removeRow(i)} style={{
+                background: "var(--error-dim)", color: "var(--error)", border: "none",
+                width: 32, height: 32, borderRadius: 8, flexShrink: 0, padding: 0, fontSize: "1rem",
+              }}>×</button>
             )}
           </div>
         ))}
       </div>
 
-      <button
-        onClick={addRow}
-        style={{ background: "transparent", color: "var(--accent-light)", border: "1px dashed var(--border)", width: "100%", marginBottom: "1rem" }}
-      >
+      <button className="btn-ghost" onClick={addRow} style={{ width: "100%", borderStyle: "dashed", marginBottom: "1rem" }}>
         + Add recipient
       </button>
 
-      <div style={{ marginBottom: "1rem" }}>
-        <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
-          Memo (optional)
-        </label>
+      <div className="input-group mb-4">
+        <label className="input-label">Memo <span className="text-dim">(optional)</span></label>
         <input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Payroll, airdrop…" maxLength={31} />
       </div>
 
-      <div className="card" style={{ marginBottom: "1rem", display: "flex", justifyContent: "space-between" }}>
+      <div className="card-gradient flex-between mb-4">
         <span className="text-muted">Total</span>
-        <span style={{ fontWeight: 700 }}>${totalAmount.toFixed(2)} QUSDC</span>
+        <span style={{ fontWeight: 800, fontSize: "1.25rem", color: "var(--accent-light)" }}>${total.toFixed(2)}</span>
       </div>
 
-      {error !== null && <p className="text-error" style={{ marginBottom: "0.75rem" }}>{error}</p>}
-      <button
-        onClick={() => { void handleSend(); }}
-        disabled={isLoading || rows.filter((r) => r.to.trim() && Number(r.amount) > 0).length === 0}
-        style={{ width: "100%" }}
-      >
-        {isLoading ? <span className="spinner" /> : `Send to ${rows.filter((r) => r.to.trim()).length} recipients`}
+      {error !== null && <div className="alert alert-error mb-3">{error}</div>}
+
+      <button className="btn-primary btn-lg" onClick={() => { void handleSend(); }} disabled={loading || validRows.length === 0}>
+        {loading ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Sending…</> : `Send to ${validRows.length || 0} recipient${validRows.length === 1 ? "" : "s"}`}
       </button>
     </main>
   );

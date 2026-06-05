@@ -16,6 +16,80 @@ interface JsonRpcResponse<T> {
   error?: BundlerError;
 }
 
+/** ERC-4337 v0.7 UserOperation in the unpacked shape bundlers expect over JSON-RPC. */
+interface RpcUserOp {
+  sender: Hex;
+  nonce: Hex;
+  factory: Hex | null;
+  factoryData: Hex | null;
+  callData: Hex;
+  callGasLimit: Hex;
+  verificationGasLimit: Hex;
+  preVerificationGas: Hex;
+  maxFeePerGas: Hex;
+  maxPriorityFeePerGas: Hex;
+  paymaster: Hex | null;
+  paymasterVerificationGasLimit: Hex | null;
+  paymasterPostOpGasLimit: Hex | null;
+  paymasterData: Hex | null;
+  signature: Hex;
+}
+
+const quantity = (v: bigint): Hex => `0x${v.toString(16)}`;
+
+/**
+ * Convert a PackedUserOp (on-chain EntryPoint v0.7 struct) into the unpacked
+ * shape required by the bundler JSON-RPC API. The signing hash is computed
+ * over the packed struct, so this is purely the inverse packing for transport.
+ */
+function toRpcUserOp(op: PackedUserOp): RpcUserOp {
+  const agl = op.accountGasLimits.slice(2);
+  const verificationGasLimit = BigInt(`0x${agl.slice(0, 32)}`);
+  const callGasLimit = BigInt(`0x${agl.slice(32, 64)}`);
+
+  const gf = op.gasFees.slice(2);
+  const maxPriorityFeePerGas = BigInt(`0x${gf.slice(0, 32)}`);
+  const maxFeePerGas = BigInt(`0x${gf.slice(32, 64)}`);
+
+  let factory: Hex | null = null;
+  let factoryData: Hex | null = null;
+  if (op.initCode.length > 2) {
+    const ic = op.initCode.slice(2);
+    factory = `0x${ic.slice(0, 40)}`;
+    factoryData = `0x${ic.slice(40)}`;
+  }
+
+  let paymaster: Hex | null = null;
+  let paymasterVerificationGasLimit: Hex | null = null;
+  let paymasterPostOpGasLimit: Hex | null = null;
+  let paymasterData: Hex | null = null;
+  if (op.paymasterAndData.length > 2) {
+    const pad = op.paymasterAndData.slice(2);
+    paymaster = `0x${pad.slice(0, 40)}`;
+    paymasterVerificationGasLimit = quantity(BigInt(`0x${pad.slice(40, 72)}`));
+    paymasterPostOpGasLimit = quantity(BigInt(`0x${pad.slice(72, 104)}`));
+    paymasterData = `0x${pad.slice(104)}`;
+  }
+
+  return {
+    sender: op.sender,
+    nonce: quantity(op.nonce),
+    factory,
+    factoryData,
+    callData: op.callData,
+    callGasLimit: quantity(callGasLimit),
+    verificationGasLimit: quantity(verificationGasLimit),
+    preVerificationGas: quantity(op.preVerificationGas),
+    maxFeePerGas: quantity(maxFeePerGas),
+    maxPriorityFeePerGas: quantity(maxPriorityFeePerGas),
+    paymaster,
+    paymasterVerificationGasLimit,
+    paymasterPostOpGasLimit,
+    paymasterData,
+    signature: op.signature,
+  };
+}
+
 /** Minimal ERC-4337 bundler JSON-RPC client. */
 export class BundlerClient {
   private readonly url: string;
@@ -27,18 +101,7 @@ export class BundlerClient {
 
   /** Submit a UserOperation to the bundler. Returns the userOpHash. */
   async sendUserOperation(op: PackedUserOp, entryPoint: string): Promise<Hex> {
-    const opForRpc = {
-      sender: op.sender,
-      nonce: `0x${op.nonce.toString(16)}`,
-      initCode: op.initCode,
-      callData: op.callData,
-      accountGasLimits: op.accountGasLimits,
-      preVerificationGas: `0x${op.preVerificationGas.toString(16)}`,
-      gasFees: op.gasFees,
-      paymasterAndData: op.paymasterAndData,
-      signature: op.signature,
-    };
-
+    const opForRpc = toRpcUserOp(op);
     const result = await this._rpc<Hex>("eth_sendUserOperation", [opForRpc, entryPoint]);
     return result;
   }

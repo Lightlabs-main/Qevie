@@ -38,7 +38,10 @@ export interface GasConfig {
 
 const DEFAULT_GAS: GasConfig = {
   callGasLimit: 200_000n,
-  verificationGasLimit: 200_000n,
+  // High enough to cover first-time account deployment via the factory (~800k gas),
+  // which EntryPoint v0.7 charges against verificationGasLimit. Unused gas is not
+  // billed, so this is safe for subsequent ops on an already-deployed account.
+  verificationGasLimit: 1_000_000n,
   preVerificationGas: 50_000n,
   maxFeePerGas: 1_000_000_000n, // 1 gwei
   maxPriorityFeePerGas: 1_000_000_000n,
