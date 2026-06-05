@@ -56,6 +56,14 @@ const MANUAL_ALLOWLIST: Set<string> = new Set(
   (process.env["MANUAL_ALLOWLIST"] ?? "").split(",").map((a) => a.trim().toLowerCase()).filter(Boolean),
 );
 
+/**
+ * When true, the free tier is open: a token is issued to any requesting
+ * account. Abuse is bounded by the paymaster's on-chain caps (per-account,
+ * daily, and global budgets). Intended for testnet/demo — leave OFF for
+ * mainnet, where the manual allowlist / .qie-domain gate applies instead.
+ */
+const OPEN_FREE_TIER = process.env["OPEN_FREE_TIER"] === "true";
+
 /** Issue an allowlist token for a smart account address. Returns null if gating fails. */
 export async function issueAllowlistToken(
   smartAccountAddress: Address,
@@ -63,7 +71,7 @@ export async function issueAllowlistToken(
   const lower = smartAccountAddress.toLowerCase();
 
   const allowed =
-    MANUAL_ALLOWLIST.has(lower) || (await hasQIEDomain(smartAccountAddress));
+    OPEN_FREE_TIER || MANUAL_ALLOWLIST.has(lower) || (await hasQIEDomain(smartAccountAddress));
 
   if (!allowed) return null;
 
