@@ -26,7 +26,14 @@ export interface UserOpResult {
 // Gas mode
 // ---------------------------------------------------------------------------
 
-export type GasMode = "sponsored" | "qusdc";
+/**
+ * Gas payment mode for a UserOperation:
+ * - `sponsored`: paymaster Mode B (fully gasless, Sybil-capped to 3 ops/account).
+ * - `qusdc`: paymaster Mode A (account pays gas in QUSDC; needs prior approval).
+ * - `self`: no paymaster — the smart account pays its own gas in native QIE.
+ *   Used once an account exhausts its free sponsored ops but holds QIE.
+ */
+export type GasMode = "sponsored" | "qusdc" | "self";
 
 export interface GasQuote {
   mode: GasMode;

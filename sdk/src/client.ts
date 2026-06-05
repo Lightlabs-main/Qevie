@@ -117,6 +117,23 @@ export class QevieClient {
 
   async pay(signer: QevieSigner, params: PayParams): Promise<UserOpResult> {
     const acc = this.account(signer);
+    const { callData, mode } = await this._buildPay(params);
+    return this._submitOp(acc, callData, mode, params.allowlistToken);
+  }
+
+  /**
+   * Submit a payment and return the userOpHash as soon as the bundler accepts
+   * it (after validation), WITHOUT waiting for on-chain inclusion. Lets the UI
+   * confirm fast and reconcile the final receipt in the background via
+   * `client.bundler.waitForUserOp(hash)`.
+   */
+  async paySubmit(signer: QevieSigner, params: PayParams): Promise<Hex> {
+    const acc = this.account(signer);
+    const { callData, mode } = await this._buildPay(params);
+    return this._submitOpNoWait(acc, callData, mode, params.allowlistToken);
+  }
+
+  private async _buildPay(params: PayParams): Promise<{ callData: Hex; mode: GasMode }> {
     const toAddress = await this._requireResolve(params.to);
     const mode = params.mode ?? "qusdc";
 
@@ -138,7 +155,7 @@ export class QevieClient {
     });
 
     const callData = this._encodeExecute(this.config.contracts.qusdc, 0n, transferData);
-    return this._submitOp(acc, callData, mode, params.allowlistToken);
+    return { callData, mode };
   }
 
   async batchPay(signer: QevieSigner, params: BatchPayParams): Promise<UserOpResult> {
@@ -323,14 +340,23 @@ export class QevieClient {
   // Internal helpers
   // ---------------------------------------------------------------------------
 
+  private async _submitOpNoWait(
+    acc: QevieAccount,
+    callData: Hex,
+    mode: GasMode,
+    allowlistToken?: AllowlistToken,
+  ): Promise<Hex> {
+    const op = await acc.buildAndSign(callData, mode, DEFAULT_GAS, allowlistToken);
+    return this.bundler.sendUserOperation(op, this.config.contracts.entryPoint);
+  }
+
   private async _submitOp(
     acc: QevieAccount,
     callData: Hex,
     mode: GasMode,
     allowlistToken?: AllowlistToken,
   ): Promise<UserOpResult> {
-    const op = await acc.buildAndSign(callData, mode, DEFAULT_GAS, allowlistToken);
-    const userOpHash = await this.bundler.sendUserOperation(op, this.config.contracts.entryPoint);
+    const userOpHash = await this._submitOpNoWait(acc, callData, mode, allowlistToken);
     return this.bundler.waitForUserOp(userOpHash);
   }
 

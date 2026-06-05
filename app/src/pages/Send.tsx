@@ -22,6 +22,7 @@ export default function Send(): React.ReactElement {
   const [memo, setMemo] = useState(params.get("memo") ?? "");
   const [step, setStep] = useState<Step>("form");
   const [result, setResult] = useState<UserOpResult | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resolvedAddr, setResolvedAddr] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
@@ -49,32 +50,60 @@ export default function Send(): React.ReactElement {
     if (signer === null || address === null) { setError("Wallet not connected"); return; }
     setStep("sending");
     setError(null);
+    setResult(null);
     try {
       const amountUnits = BigInt(Math.round(parseFloat(amount) * 1e6));
       const gas = await gaslessParams(client, address);
-      const res = await client.pay(signer, {
+      // Submit and return as soon as the bundler accepts the op (after
+      // validation) — don't block the UI on full on-chain inclusion.
+      const userOpHash = await client.paySubmit(signer, {
         to: to.trim(), amount: amountUnits,
         memo: memo.trim() || undefined, ...gas,
       });
-      setResult(res);
+      setConfirming(true);
       setStep("done");
+      // Reconcile the on-chain receipt in the background.
+      client.bundler
+        .waitForUserOp(userOpHash)
+        .then((res) => {
+          if (res.status === "failed") {
+            setError("Payment was submitted but failed on-chain.");
+          } else {
+            setResult(res);
+          }
+        })
+        .catch(() => { /* keep the optimistic "submitted" state */ })
+        .finally(() => setConfirming(false));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Send failed");
       setStep("confirm");
     }
   };
 
-  if (step === "done" && result !== null) {
+  if (step === "done") {
+    const confirmed = result !== null && result.status === "mined";
+    const txHash = result?.txHash ?? null;
     return (
       <main className="page fade-in">
         <div style={{ textAlign: "center", paddingTop: "2rem" }}>
-          <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>✅</div>
-          <h1 style={{ marginBottom: "0.5rem" }}>Sent!</h1>
-          <p className="text-muted">Your QUSDC payment was sent successfully.</p>
+          <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>{confirmed ? "✅" : "📤"}</div>
+          <h1 style={{ marginBottom: "0.5rem" }}>{confirmed ? "Sent!" : "Payment submitted"}</h1>
 
-          {result.txHash !== null && (
+          {confirmed ? (
+            <p className="text-muted">Your QUSDC payment was confirmed on-chain.</p>
+          ) : error !== null ? (
+            <p className="text-muted">{error}</p>
+          ) : confirming ? (
+            <p className="text-muted" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+              <span className="spinner" style={{ width: 16, height: 16 }} /> Confirming on-chain…
+            </p>
+          ) : (
+            <p className="text-muted">Payment was submitted to the network.</p>
+          )}
+
+          {txHash !== null && (
             <a
-              href={`${EXPLORER}/tx/${result.txHash}`}
+              href={`${EXPLORER}/tx/${txHash}`}
               target="_blank" rel="noreferrer"
               className="chip chip-accent"
               style={{ display: "inline-flex", marginTop: "1.5rem", textDecoration: "none" }}
@@ -85,7 +114,10 @@ export default function Send(): React.ReactElement {
 
           <button
             className="btn-secondary btn-lg"
-            onClick={() => { setStep("form"); setResult(null); setTo(""); setAmount(""); setMemo(""); }}
+            onClick={() => {
+              setStep("form"); setResult(null); setConfirming(false); setError(null);
+              setTo(""); setAmount(""); setMemo("");
+            }}
             style={{ marginTop: "2rem" }}
           >
             Send another

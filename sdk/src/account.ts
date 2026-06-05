@@ -106,6 +106,10 @@ export class QevieAccount {
   ): Promise<GasQuote> {
     const addr = await this.getAddress();
 
+    if (mode === "self") {
+      return { mode: "self", qusdcCost: 0n, label: "Gas paid in QIE" };
+    }
+
     if (mode === "sponsored") {
       const remaining = await this.publicClient.readContract({
         address: this.contracts.paymaster,
@@ -158,7 +162,10 @@ export class QevieAccount {
     ]);
 
     let paymasterAndData: Hex;
-    if (mode === "sponsored") {
+    if (mode === "self") {
+      // No paymaster — the smart account pays its own gas in native QIE.
+      paymasterAndData = "0x";
+    } else if (mode === "sponsored") {
       if (allowlistToken === undefined) {
         throw new Error("Allowlist token required for sponsored mode");
       }

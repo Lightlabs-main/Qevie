@@ -133,8 +133,8 @@ export class BundlerClient {
   /** Wait for a UserOperation to be mined, polling up to maxAttempts times. */
   async waitForUserOp(
     userOpHash: Hex,
-    maxAttempts = 20,
-    intervalMs = 2000,
+    maxAttempts = 40,
+    intervalMs = 800,
   ): Promise<UserOpResult> {
     for (let i = 0; i < maxAttempts; i++) {
       const receipt = await this.getUserOperationReceipt(userOpHash);
