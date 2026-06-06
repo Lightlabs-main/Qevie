@@ -37,20 +37,34 @@ export default function Home(): React.ReactElement {
 
   const actions = [
     { to: "/send", label: "Send", icon: "↑", color: "var(--accent)" },
+    { to: "/dashboard", label: "Wallet", icon: "👛", color: "#f59e0b" },
     { to: "/links", label: "Links", icon: "🔗", color: "#38bdf8" },
-    { to: "/batch", label: "Batch", icon: "⊛", color: "#2dd4bf" },
-    { to: "/scan", label: "Scan", icon: "⊞", color: "#10b981" },
+    { to: "/subscriptions", label: "Stats", icon: "🔄", color: "#818cf8" },
   ];
 
   return (
     <>
-      {/* Tight Header */}
+      {/* Header Branding */}
       <header className="page-header-tight flex-between">
-        <div className="flex-center" style={{ gap: "var(--s-2)" }}>
-          <Logo size={32} glow={false} />
-          <div style={{ fontWeight: 800, fontSize: "0.875rem", letterSpacing: "0.1em" }}>QEVIE</div>
+        <div className="flex-center" style={{ gap: 12 }}>
+          <Logo size={44} glow={false} />
+          <span style={{
+            fontFamily: "var(--font-heading)",
+            fontWeight: 900,
+            fontSize: "1.375rem",
+            letterSpacing: "0.08em",
+            background: "linear-gradient(135deg, #fff 40%, var(--accent) 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            lineHeight: 1,
+          }}>QEVIE</span>
         </div>
-        <div style={{ fontSize: "0.625rem", color: "var(--text-muted)", fontWeight: 700 }}>MAINNET // V1.0</div>
+        <div style={{
+          fontSize: "0.6rem", color: "var(--text-muted)", fontWeight: 700,
+          background: "var(--surface-2)", padding: "4px 10px", borderRadius: "var(--r-sm)",
+          border: "1px solid var(--glass-border)", letterSpacing: "0.05em",
+          alignSelf: "flex-end", marginBottom: 2,
+        }}>MAINNET</div>
       </header>
 
       {/* Anchor Balance Section */}
