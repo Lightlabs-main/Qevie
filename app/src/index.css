@@ -182,6 +182,14 @@ h3 {
   padding: var(--s-4);
 }
 
+.card-gradient {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  padding: var(--s-3);
+  box-shadow: var(--shadow-tight);
+}
+
 .glass-card {
   background: var(--glass-bg);
   backdrop-filter: blur(var(--blur));
@@ -238,6 +246,15 @@ button,
   overflow: hidden;
   font-size: 0.9375rem;
   letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.btn-sm {
+  height: 32px;
+  padding: 0 var(--s-2);
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: var(--r-sm);
 }
 
 .btn-primary {

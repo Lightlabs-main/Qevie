@@ -43,6 +43,10 @@ function metamaskDeepLink(): string {
   return `https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}`;
 }
 
+function openWalletDeepLink(): void {
+  window.location.assign(metamaskDeepLink());
+}
+
 /**
  * Resolve an injected EIP-1193 provider. Mobile wallet in-app browsers often
  * inject `window.ethereum` *after* the app mounts, so we can't rely on a
@@ -162,7 +166,8 @@ export function WalletProvider({ children }: { children: ReactNode }): React.Rea
         // wallet's in-app browser instead of dead-ending on "no wallet".
         if (isMobile()) {
           setNeedsWalletApp(true);
-          setError("No wallet found in this browser. Open Qevie inside your wallet app.");
+          setError("No wallet found in this browser. Opening MetaMask...");
+          openWalletDeepLink();
         } else {
           setError("No Web3 wallet detected. Please install QIE Wallet or MetaMask.");
         }

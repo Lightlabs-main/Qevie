@@ -64,14 +64,14 @@ export default function Dashboard(): React.ReactElement {
         signerAddress !== null ? client.publicClient.getBalance({ address: signerAddress }) : Promise.resolve(null),
         signerAddress !== null
           ? client.publicClient.readContract({
-              address: APP_CONFIG.contracts.qusdc, abi: QUSDC_ABI, functionName: "balanceOf", args: [signerAddress],
-            })
+            address: APP_CONFIG.contracts.qusdc, abi: QUSDC_ABI, functionName: "balanceOf", args: [signerAddress],
+          })
           : Promise.resolve(null),
         address !== null ? client.publicClient.getBalance({ address }) : Promise.resolve(null),
         address !== null
           ? client.publicClient.readContract({
-              address: APP_CONFIG.contracts.qusdc, abi: QUSDC_ABI, functionName: "balanceOf", args: [address],
-            })
+            address: APP_CONFIG.contracts.qusdc, abi: QUSDC_ABI, functionName: "balanceOf", args: [address],
+          })
           : Promise.resolve(null),
       ]);
       setWalletQie(ownerQie as bigint | null);
@@ -144,10 +144,12 @@ export default function Dashboard(): React.ReactElement {
         </div>
         <p style={{ fontSize: "1.75rem", fontWeight: 800, lineHeight: 1.1 }}>{formatQusdc(smartQusdc)}</p>
         <p className="text-muted" style={{ marginBottom: "0.85rem", fontSize: "0.85rem" }}>{formatQie(smartQie)}</p>
-        <div className="flex-between" style={{ gap: "0.5rem" }}>
-          <span className="mono" style={{ fontSize: "0.8rem" }}>{short(address)}</span>
-          <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
-            <button className="btn-secondary btn-sm" onClick={copyAddr}>{copied ? "✓ Copied" : "Copy"}</button>
+        <div className="flex-between" style={{ gap: "var(--s-3)", marginTop: "var(--s-2)" }}>
+          <span className="mono" style={{ fontSize: "0.8125rem", color: "var(--text-2)", opacity: 0.8 }}>{short(address)}</span>
+          <div className="flex-center" style={{ gap: "var(--s-1)", flexShrink: 0 }}>
+            <button className="btn-secondary btn-sm" onClick={copyAddr} style={{ minWidth: "80px" }}>
+              {copied ? "✓ COPIED" : "COPY"}
+            </button>
             {address !== null && (
               <a
                 className="btn-secondary btn-sm"
@@ -155,7 +157,7 @@ export default function Dashboard(): React.ReactElement {
                 target="_blank" rel="noreferrer"
                 style={{ textDecoration: "none" }}
               >
-                Explorer ↗
+                EXPLORER ↗
               </a>
             )}
           </div>
