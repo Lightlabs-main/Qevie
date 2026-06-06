@@ -18,10 +18,7 @@ contract BatchPayments {
     uint256 public constant MAX_RECIPIENTS = 200;
 
     event BatchPaid(
-        address indexed sender,
-        address[] recipients,
-        uint256[] amounts,
-        bytes32 indexed batchId
+        address indexed sender, address[] recipients, uint256[] amounts, bytes32 indexed batchId
     );
 
     error ArrayLengthMismatch();
@@ -42,11 +39,9 @@ contract BatchPayments {
     /// @param recipients Destination addresses. Must match amounts length.
     /// @param amounts QUSDC amounts in 6-decimal units. Each must be > 0.
     /// @param batchId Off-chain identifier for this batch (for event indexing).
-    function batchPay(
-        address[] calldata recipients,
-        uint256[] calldata amounts,
-        bytes32 batchId
-    ) external {
+    function batchPay(address[] calldata recipients, uint256[] calldata amounts, bytes32 batchId)
+        external
+    {
         _nonReentrantBefore();
 
         uint256 len = recipients.length;

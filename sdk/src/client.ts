@@ -21,7 +21,6 @@ import { BundlerClient } from "./bundler.js";
 import { resolveRecipient } from "./resolve.js";
 import { buildPaymentUri, parsePaymentUri, buildShareUrl } from "./links.js";
 import { hashReceiptMetadata } from "./receipts.js";
-import type { QevieContracts } from "./contracts.js";
 import type {
   QevieClientConfig,
   QevieSigner,
@@ -30,6 +29,7 @@ import type {
   PayParams,
   BatchPayParams,
   RequestParams,
+  PayRequestParams,
   CreateReceiptInput,
   CreateReceiptResult,
   PassportStats,
@@ -56,6 +56,19 @@ export class QevieClient {
   readonly config: QevieClientConfig;
   readonly publicClient: AnyPublicClient;
   readonly bundler: BundlerClient;
+  readonly receipts: {
+    createReceipt: (input: CreateReceiptInput) => Promise<CreateReceiptResult>;
+    getReceipt: (receiptId: Hex) => Promise<QevieReceipt>;
+    listForAccount: (account: Address) => Promise<QevieReceipt[]>;
+    listByPayer: (account: Address) => Promise<QevieReceipt[]>;
+    listByPayee: (account: Address) => Promise<QevieReceipt[]>;
+    exportReceipt: (receiptId: Hex) => Promise<string>;
+  };
+  readonly passport: {
+    getPassport: (account: Address) => Promise<PassportStats>;
+    getStats: (account: Address) => Promise<PassportStats>;
+    getRecentReceipts: (account: Address, limit?: number) => Promise<QevieReceipt[]>;
+  };
 
   constructor(config: QevieClientConfig) {
     this.config = config;
@@ -63,6 +76,19 @@ export class QevieClient {
       transport: http(config.rpcUrl),
     }) as AnyPublicClient;
     this.bundler = new BundlerClient(config.bundlerUrl);
+    this.receipts = {
+      createReceipt: this.createReceipt.bind(this),
+      getReceipt: this.getReceipt.bind(this),
+      listForAccount: this.listForAccount.bind(this),
+      listByPayer: this.listByPayer.bind(this),
+      listByPayee: this.listByPayee.bind(this),
+      exportReceipt: this.exportReceipt.bind(this),
+    };
+    this.passport = {
+      getPassport: this.getPassport.bind(this),
+      getStats: this.getStats.bind(this),
+      getRecentReceipts: this.getRecentReceipts.bind(this),
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -207,6 +233,29 @@ export class QevieClient {
     return this._submitOp(acc, callData, "qusdc");
   }
 
+  async payRequest(signer: QevieSigner, params: PayRequestParams): Promise<UserOpResult> {
+    const userOpHash = await this.payRequestSubmit(signer, params);
+    return this.bundler.waitForUserOp(userOpHash);
+  }
+
+  async payRequestSubmit(signer: QevieSigner, params: PayRequestParams): Promise<Hex> {
+    const acc = this.account(signer);
+    const mode = params.mode ?? "qusdc";
+
+    const payCallData = encodeFunctionData({
+      abi: PAYMENT_REQUEST_ABI,
+      functionName: "payRequest",
+      args: [params.requestId],
+    });
+
+    const callData = this._encodeExecute(
+      this.config.contracts.paymentRequest,
+      0n,
+      payCallData,
+    );
+    return this._submitOpNoWait(acc, callData, mode, params.allowlistToken);
+  }
+
   // ---------------------------------------------------------------------------
   // Subscriptions
   // ---------------------------------------------------------------------------
@@ -320,6 +369,7 @@ export class QevieClient {
     mode: GasMode,
     _allowlistToken?: AllowlistToken,
   ): Promise<GasQuote> {
+    void _allowlistToken;
     return this.account(signer).quoteGas(mode);
   }
 

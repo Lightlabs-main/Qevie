@@ -3,11 +3,14 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@qevie/sdk": ["../sdk/src/index.ts"],
+      "@qevie/sdk/react": ["../sdk/src/react/index.ts"]
+    },
     "strict": true,
     "noImplicitAny": true,
     "noImplicitReturns": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
     "skipLibCheck": true
   },
   "include": ["src/**/*"],

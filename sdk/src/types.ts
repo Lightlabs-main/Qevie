@@ -75,6 +75,12 @@ export interface RequestParams {
   expirySeconds?: number;
 }
 
+export interface PayRequestParams {
+  requestId: bigint;
+  mode?: GasMode;
+  allowlistToken?: AllowlistToken;
+}
+
 export interface RequestRecord {
   requestId: bigint;
   requestor: Address;

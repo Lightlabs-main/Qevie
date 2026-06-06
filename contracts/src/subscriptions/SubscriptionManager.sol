@@ -174,8 +174,8 @@ contract SubscriptionManager {
     /// @notice Return true if a subscription charge is currently due.
     function isDue(uint256 subId) external view returns (bool) {
         Subscription storage sub = _getSub(subId);
-        return sub.active && block.timestamp >= sub.nextChargeAt
-            && sub.paymentsMade < sub.maxPayments;
+        return
+            sub.active && block.timestamp >= sub.nextChargeAt && sub.paymentsMade < sub.maxPayments;
     }
 
     function _getSub(uint256 subId) private view returns (Subscription storage sub) {

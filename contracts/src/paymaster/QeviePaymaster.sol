@@ -262,7 +262,10 @@ contract QeviePaymaster is IPaymaster {
         bytes calldata context,
         uint256 actualGasCost,
         uint256 /* actualUserOpFeePerGas */
-    ) external override {
+    )
+        external
+        override
+    {
         _requireEntryPoint();
         _nonReentrantBefore();
 

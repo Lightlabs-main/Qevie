@@ -29,6 +29,7 @@ export type {
   PayParams,
   BatchPayParams,
   RequestParams,
+  PayRequestParams,
   RequestRecord,
   ReceiptType,
   CreateReceiptInput,

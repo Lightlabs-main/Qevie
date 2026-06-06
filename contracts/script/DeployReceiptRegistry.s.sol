@@ -37,10 +37,6 @@ contract DeployReceiptRegistry {
 
         VM.stopBroadcast();
 
-        deployed = Deployed({
-            owner: owner,
-            issuer: issuer,
-            receiptRegistry: address(registry)
-        });
+        deployed = Deployed({owner: owner, issuer: issuer, receiptRegistry: address(registry)});
     }
 }

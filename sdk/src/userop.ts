@@ -8,7 +8,7 @@ import {
   parseAbiParameters,
   keccak256,
 } from "viem";
-import type { AllowlistToken, GasMode } from "./types.js";
+import type { AllowlistToken } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // ERC-4337 v0.7 UserOperation helpers

@@ -6,6 +6,8 @@ import type { UserOpResult } from "@qevie/sdk";
 import type { CreateReceiptResult } from "@qevie/sdk";
 import { APP_CONFIG } from "../config.js";
 import { gaslessParams } from "../lib/gasless.js";
+import { PAYMENT_REQUEST_ABI } from "@qevie/sdk";
+import { hexToString, type Address } from "viem";
 
 const EXPLORER = APP_CONFIG.chainId === 1990
   ? "https://mainnet.qie.digital"
@@ -17,6 +19,7 @@ export default function Send(): React.ReactElement {
   const client = useQevieClient();
   const { signer, address } = useWallet();
   const [params] = useSearchParams();
+  const requestId = params.get("requestId");
 
   const [to, setTo] = useState(params.get("to") ?? "");
   const [amount, setAmount] = useState(params.get("amount") ?? "");
@@ -30,7 +33,49 @@ export default function Send(): React.ReactElement {
   const [resolvedAddr, setResolvedAddr] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
 
+  useEffect(() => {
+    if (requestId === null) return;
+    let mounted = true;
+    void (async () => {
+      setResolving(true);
+      setError(null);
+      try {
+        const request = await client.publicClient.readContract({
+          address: client.config.contracts.paymentRequest,
+          abi: PAYMENT_REQUEST_ABI,
+          functionName: "getRequest",
+          args: [BigInt(requestId)],
+        }) as {
+          requestor: Address;
+          payer: Address;
+          amount: bigint;
+          memo: `0x${string}`;
+          expiry: bigint;
+          status: number;
+        };
+
+        if (!mounted) return;
+        setResolvedAddr(request.requestor);
+        setTo(request.requestor);
+        setAmount((Number(request.amount) / 1e6).toString());
+        const memoText = hexToString(request.memo, { size: 32 }).replace(/\0+$/g, "");
+        if (memoText !== "") setMemo(memoText);
+      } catch (e) {
+        if (!mounted) return;
+        setError(e instanceof Error ? e.message : "Failed to load request");
+      } finally {
+        if (mounted) setResolving(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [client, requestId]);
+
   const handlePreview = async (): Promise<void> => {
+    if (requestId !== null) {
+      if (resolvedAddr === null || !amount.trim()) return;
+      setStep("confirm");
+      return;
+    }
     if (!to.trim() || !amount.trim()) return;
     setError(null);
     setResolving(true);
@@ -57,11 +102,50 @@ export default function Send(): React.ReactElement {
     try {
       const amountUnits = BigInt(Math.round(parseFloat(amount) * 1e6));
       const gas = await gaslessParams(client, address);
-      // Submit and return as soon as the bundler accepts the op (after
-      // validation) — don't block the UI on full on-chain inclusion.
+      const isRequestSettlement = requestId !== null;
+      if (isRequestSettlement) {
+        const res = await client.payRequest(signer, {
+          requestId: BigInt(requestId),
+          ...gas,
+        });
+        setStep("done");
+        setResult(res);
+        if (res.status !== "failed" && APP_CONFIG.contracts.receiptRegistry !== undefined && res.txHash !== null) {
+          try {
+            const created = await client.createReceipt({
+              payer: address,
+              payee: resolvedAddr as `0x${string}` ?? to.trim() as `0x${string}`,
+              token: APP_CONFIG.contracts.qusdc,
+              amount,
+              amountPrivate: false,
+              receiptType: "PAYMENT_REQUEST_SETTLED",
+              paymentReference: res.txHash,
+              metadata: {
+                memo: memo.trim() || null,
+                source: "request-settlement-flow",
+                requestId,
+                txHash: res.txHash,
+                userOpHash: res.userOpHash,
+              },
+            });
+            setReceipt(created);
+            setReceiptError(null);
+          } catch (receiptFailure) {
+            setReceiptError(
+              receiptFailure instanceof Error
+                ? receiptFailure.message
+                : "Payment succeeded, but receipt creation failed.",
+            );
+          }
+        }
+        return;
+      }
+
       const userOpHash = await client.paySubmit(signer, {
-        to: to.trim(), amount: amountUnits,
-        memo: memo.trim() || undefined, ...gas,
+        to: to.trim(),
+        amount: amountUnits,
+        memo: memo.trim() || undefined,
+        ...gas,
       });
       setConfirming(true);
       setStep("done");
@@ -120,7 +204,11 @@ export default function Send(): React.ReactElement {
           <h1 style={{ marginBottom: "0.5rem" }}>{confirmed ? "Sent!" : "Payment submitted"}</h1>
 
           {confirmed ? (
-            <p className="text-muted">Your QUSDC payment was confirmed on-chain.</p>
+            <p className="text-muted">
+              {requestId === null
+                ? "Your QUSDC payment was confirmed on-chain."
+                : "Your payment request settlement was confirmed on-chain."}
+            </p>
           ) : error !== null ? (
             <p className="text-muted">{error}</p>
           ) : confirming ? (
@@ -215,6 +303,12 @@ export default function Send(): React.ReactElement {
             <span className="row-label">Gas</span>
             <span className="chip chip-success" style={{ fontSize: "0.75rem" }}>Paid in QUSDC</span>
           </div>
+          {requestId !== null && (
+            <div className="row">
+              <span className="row-label">Request</span>
+              <span className="row-value">#{requestId}</span>
+            </div>
+          )}
         </div>
 
         {error !== null && <div className="alert alert-error mb-3">{error}</div>}

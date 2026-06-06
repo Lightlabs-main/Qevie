@@ -248,7 +248,7 @@ await qevie.pay(signer, {
   memo: "Thanks",
 });
 
-const passport = await qevie.getPassport("0xMerchant");
+const passport = await qevie.passport.getPassport("0xMerchant");
 ```
 
 PM2 process names:

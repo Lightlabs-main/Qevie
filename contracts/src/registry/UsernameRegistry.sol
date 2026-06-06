@@ -16,7 +16,9 @@ contract UsernameRegistry {
     /// @dev smart account address → raw username bytes (for reverse resolution).
     mapping(address => bytes) private _accountToUsername;
 
-    event UsernameRegistered(bytes32 indexed usernameHash, string username, address indexed account);
+    event UsernameRegistered(
+        bytes32 indexed usernameHash, string username, address indexed account
+    );
     event UsernameReleased(bytes32 indexed usernameHash, address indexed account);
 
     error UsernameTooShort(uint256 length);

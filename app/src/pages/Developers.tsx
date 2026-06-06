@@ -29,12 +29,12 @@ export default function Developers(): React.ReactElement {
 
       <Section
         title="Create Receipt"
-        code={`await qevie.createReceipt({\n  payer: "0xPayer",\n  payee: "0xPayee",\n  token: "0xQUSDC",\n  amount: "10",\n  amountPrivate: false,\n  receiptType: "SINGLE_PAYMENT",\n  metadata: {\n    memo: "Thanks",\n    orderId: "ORDER-001"\n  }\n});`}
+        code={`await qevie.receipts.createReceipt({\n  payer: "0xPayer",\n  payee: "0xPayee",\n  token: "0xQUSDC",\n  amount: "10",\n  amountPrivate: false,\n  receiptType: "SINGLE_PAYMENT",\n  metadata: {\n    memo: "Thanks",\n    orderId: "ORDER-001"\n  }\n});`}
       />
 
       <Section
         title="Read Passport"
-        code={`const passport = await qevie.getPassport("0xMerchant");\nconsole.log(passport.totalReceipts);`}
+        code={`const passport = await qevie.passport.getPassport("0xMerchant");\nconsole.log(passport.totalReceipts);`}
       />
 
       <div className="surface-card">

@@ -4,6 +4,8 @@ import { useWallet } from "../hooks/useWallet.js";
 import { buildPaymentUri } from "@qevie/sdk";
 import { APP_CONFIG } from "../config.js";
 import { QRCodeSVG } from "qrcode.react";
+import { decodeEventLog } from "viem";
+import { PAYMENT_REQUEST_ABI } from "@qevie/sdk";
 
 type Step = "form" | "created";
 
@@ -16,6 +18,7 @@ export default function Request(): React.ReactElement {
   const [memo, setMemo] = useState("");
   const [step, setStep] = useState<Step>("form");
   const [payUri, setPayUri] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -26,7 +29,7 @@ export default function Request(): React.ReactElement {
 
     try {
       const amountUnits = BigInt(Math.round(Number(amount) * 1e6));
-      await client.requestPayment(signer, {
+      const result = await client.requestPayment(signer, {
         from: from.trim() || undefined,
         amount: amountUnits,
         memo: memo.trim() || undefined,
@@ -38,7 +41,32 @@ export default function Request(): React.ReactElement {
         amount: amountUnits,
         memo: memo.trim() || undefined,
       });
+      let nextShareUrl = `${APP_CONFIG.appBaseUrl}/pay?pay=${encodeURIComponent(uri)}`;
+      if (result.txHash !== null) {
+        try {
+          const txReceipt = await client.publicClient.getTransactionReceipt({ hash: result.txHash });
+          for (const log of txReceipt.logs) {
+            try {
+              const decoded = decodeEventLog({
+                abi: PAYMENT_REQUEST_ABI,
+                data: log.data,
+                topics: log.topics,
+              });
+              if (decoded.eventName === "RequestCreated") {
+                const args = decoded.args as { requestId?: bigint };
+                nextShareUrl = `${APP_CONFIG.appBaseUrl}/send?requestId=${args.requestId?.toString() ?? ""}`;
+                break;
+              }
+            } catch {
+              // ignore unrelated logs
+            }
+          }
+        } catch {
+          // fall back to generic payment link
+        }
+      }
       setPayUri(uri);
+      setShareUrl(nextShareUrl);
       setStep("created");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create request");
@@ -48,7 +76,6 @@ export default function Request(): React.ReactElement {
   }
 
   if (step === "created" && payUri !== null) {
-    const shareUrl = `${APP_CONFIG.appBaseUrl}/pay?pay=${encodeURIComponent(payUri)}`;
     return (
       <main className="page">
         <h2 style={{ marginBottom: "1.5rem" }}>Request created</h2>
@@ -58,8 +85,8 @@ export default function Request(): React.ReactElement {
             {payUri}
           </p>
         </div>
-        <button
-          onClick={() => { void navigator.clipboard.writeText(shareUrl); }}
+          <button
+          onClick={() => { void navigator.clipboard.writeText(shareUrl ?? `${APP_CONFIG.appBaseUrl}/pay?pay=${encodeURIComponent(payUri)}`); }}
           style={{ width: "100%", marginBottom: "0.75rem" }}
         >
           Copy share link

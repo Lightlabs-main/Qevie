@@ -50,85 +50,110 @@ contract E2EGaslessTest {
 
     // Mode B allowlist token for 0x04045e066bd061B2F80aa38d3fBDce96CA078Fa8
     // Issued by paymaster-service at 2026-06-04
-    uint32 private constant ALLOWLIST_EXPIRY = 1780688589;
+    uint32 private constant ALLOWLIST_EXPIRY = 1_780_688_589;
     bytes private constant ALLOWLIST_SIG =
         hex"b7109385f66f2f28b0eb770dd8990a42a682c5fb15549d37acbd8c78e124b4af4508c51647363cef0c39e21a1e5dfd95d616a9ab2d193eeee73db98fb606fd8c1c";
 
+    struct Context {
+        uint256 ownerKey;
+        address owner;
+        IEntryPoint entryPoint;
+        QevieSmartAccountFactory factory;
+        QeviePaymaster paymaster;
+        IERC20 qusdc;
+        address recipient;
+        address smartAccount;
+    }
+
     function run() external returns (uint256 transferredAmount) {
-        uint256 ownerKey = VM.envUint("DEPLOY_PRIVATE_KEY");
-        address owner = VM.addr(ownerKey);
-
-        IEntryPoint entryPoint = IEntryPoint(VM.envAddress("ENTRYPOINT_ADDRESS"));
-        QevieSmartAccountFactory factory =
-            QevieSmartAccountFactory(VM.envAddress("ACCOUNT_FACTORY_ADDRESS"));
-        QeviePaymaster paymaster = QeviePaymaster(payable(VM.envAddress("PAYMASTER_ADDRESS")));
-        IERC20 qusdc = IERC20(VM.envAddress("QUSDC_ADDRESS"));
-
-        address recipient = address(0xCAFEBABE);
-        address smartAccount = factory.getAddress(owner, SALT);
-
-        require(qusdc.balanceOf(smartAccount) >= TRANSFER_AMOUNT, "fund smart account first");
-        require(smartAccount.code.length == 0, "account already deployed, change SALT");
-
-        VM.label(smartAccount, "TestSmartAccount");
-
-        bytes memory initCode = abi.encodePacked(
-            address(factory),
-            abi.encodeCall(QevieSmartAccountFactory.createAccount, (owner, SALT))
-        );
-
-        // callData: smart account executes qusdc.transfer(recipient, 1 QUSDC)
-        bytes memory transferCall = abi.encodeWithSelector(
-            IERC20.transfer.selector, recipient, TRANSFER_AMOUNT
-        );
-        bytes memory callData = abi.encodeWithSelector(
-            bytes4(0xb61d27f6), // execute(address,uint256,bytes)
-            address(qusdc),
-            uint256(0),
-            transferCall
-        );
-
-        // paymasterAndData for Mode B (sponsored)
-        bytes memory paymasterAndData = abi.encodePacked(
-            address(paymaster),
-            uint128(PAYMASTER_VERIFICATION_GAS),
-            uint128(PAYMASTER_POSTOP_GAS),
-            uint8(0x01), // MODE_SPONSORED
-            ALLOWLIST_EXPIRY,
-            ALLOWLIST_SIG
-        );
+        Context memory ctx = _loadContext();
+        _validateContext(ctx);
 
         PackedUserOperation memory userOp = PackedUserOperation({
-            sender: smartAccount,
-            nonce: entryPoint.getNonce(smartAccount, 0),
-            initCode: initCode,
-            callData: callData,
+            sender: ctx.smartAccount,
+            nonce: ctx.entryPoint.getNonce(ctx.smartAccount, 0),
+            initCode: _buildInitCode(ctx),
+            callData: _buildCallData(ctx),
             accountGasLimits: _pack(VERIFICATION_GAS, CALL_GAS),
             preVerificationGas: PRE_VERIFICATION_GAS,
             gasFees: _pack(MAX_FEE, MAX_FEE),
-            paymasterAndData: paymasterAndData,
+            paymasterAndData: _buildPaymasterAndData(ctx),
             signature: ""
         });
 
+        userOp.signature = _signUserOp(ctx.ownerKey, _userOpDigest(ctx.entryPoint, userOp));
+        _executeUserOp(ctx, userOp);
+
+        transferredAmount = ctx.qusdc.balanceOf(ctx.recipient);
+        require(transferredAmount == TRANSFER_AMOUNT, "transfer failed");
+        require(ctx.smartAccount.code.length > 0, "account not deployed");
+    }
+
+    function _loadContext() private returns (Context memory ctx) {
+        ctx.ownerKey = VM.envUint("DEPLOY_PRIVATE_KEY");
+        ctx.owner = VM.addr(ctx.ownerKey);
+        ctx.entryPoint = IEntryPoint(VM.envAddress("ENTRYPOINT_ADDRESS"));
+        ctx.factory = QevieSmartAccountFactory(VM.envAddress("ACCOUNT_FACTORY_ADDRESS"));
+        ctx.paymaster = QeviePaymaster(payable(VM.envAddress("PAYMASTER_ADDRESS")));
+        ctx.qusdc = IERC20(VM.envAddress("QUSDC_ADDRESS"));
+        ctx.recipient = address(0xCAFEBABE);
+        ctx.smartAccount = ctx.factory.getAddress(ctx.owner, SALT);
+    }
+
+    function _validateContext(Context memory ctx) private {
+        require(
+            ctx.qusdc.balanceOf(ctx.smartAccount) >= TRANSFER_AMOUNT, "fund smart account first"
+        );
+        require(ctx.smartAccount.code.length == 0, "account already deployed, change SALT");
+        VM.label(ctx.smartAccount, "TestSmartAccount");
+    }
+
+    function _buildInitCode(Context memory ctx) private pure returns (bytes memory) {
+        return abi.encodePacked(
+            address(ctx.factory),
+            abi.encodeCall(QevieSmartAccountFactory.createAccount, (ctx.owner, SALT))
+        );
+    }
+
+    function _buildCallData(Context memory ctx) private pure returns (bytes memory) {
+        bytes memory transferCall =
+            abi.encodeWithSelector(IERC20.transfer.selector, ctx.recipient, TRANSFER_AMOUNT);
+        return
+            abi.encodeWithSelector(bytes4(0xb61d27f6), address(ctx.qusdc), uint256(0), transferCall);
+    }
+
+    function _buildPaymasterAndData(Context memory ctx) private pure returns (bytes memory) {
+        return abi.encodePacked(
+            address(ctx.paymaster),
+            uint128(PAYMASTER_VERIFICATION_GAS),
+            uint128(PAYMASTER_POSTOP_GAS),
+            uint8(0x01),
+            ALLOWLIST_EXPIRY,
+            ALLOWLIST_SIG
+        );
+    }
+
+    function _userOpDigest(IEntryPoint entryPoint, PackedUserOperation memory userOp)
+        private
+        view
+        returns (bytes32)
+    {
         bytes32 userOpHash =
             keccak256(abi.encode(_hashUserOp(userOp), address(entryPoint), block.chainid));
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n32", userOpHash)
-        );
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", userOpHash));
+    }
+
+    function _signUserOp(uint256 ownerKey, bytes32 digest) private returns (bytes memory) {
         (uint8 v, bytes32 r, bytes32 s) = VM.sign(ownerKey, digest);
-        userOp.signature = abi.encodePacked(r, s, v);
+        return abi.encodePacked(r, s, v);
+    }
 
-        VM.startBroadcast(ownerKey);
-
+    function _executeUserOp(Context memory ctx, PackedUserOperation memory userOp) private {
+        VM.startBroadcast(ctx.ownerKey);
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = userOp;
-        entryPoint.handleOps(ops, payable(owner));
-
+        ctx.entryPoint.handleOps(ops, payable(ctx.owner));
         VM.stopBroadcast();
-
-        transferredAmount = qusdc.balanceOf(recipient);
-        require(transferredAmount == TRANSFER_AMOUNT, "transfer failed");
-        require(smartAccount.code.length > 0, "account not deployed");
     }
 
     function _pack(uint256 high128, uint256 low128) private pure returns (bytes32) {

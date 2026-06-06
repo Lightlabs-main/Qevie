@@ -22,8 +22,13 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { SUBSCRIPTION_MANAGER_ABI, createQevieClient } from "@qevie/sdk";
+import {
+  SUBSCRIPTION_MANAGER_ABI,
+  createQevieClient,
+  hashReceiptMetadata,
+} from "@qevie/sdk";
 import { CHAIN_ID, RPC_URL, BUNDLER_URL, CONTRACTS, SIGNER_PRIVATE_KEY } from "./config.js";
+import { issueReceipt } from "./receipts.js";
 
 interface ActiveSub {
   subId: bigint;
@@ -32,7 +37,7 @@ interface ActiveSub {
 
 const POLL_INTERVAL_MS = Number(process.env["KEEPER_POLL_INTERVAL_MS"] ?? 60_000);
 
-let activeSubs: ActiveSub[] = [];
+const activeSubs: ActiveSub[] = [];
 
 function buildKeeperSigner(privateKey: Hex) {
   const account = privateKeyToAccount(privateKey);
@@ -77,6 +82,22 @@ export async function runKeeperOnce(): Promise<void> {
 
       if (!isDue) continue;
 
+      const sub = await publicClient.readContract({
+        address: CONTRACTS.subscriptionManager,
+        abi: SUBSCRIPTION_MANAGER_ABI,
+        functionName: "getSubscription",
+        args: [subId],
+      }) as {
+        payer: Address;
+        payee: Address;
+        amount: bigint;
+        period: bigint;
+        maxPayments: bigint;
+        paymentsMade: bigint;
+        nextChargeAt: bigint;
+        active: boolean;
+      };
+
       console.log(`[keeper] charging subscription ${subId} for payee ${payeeAddress}`);
 
       const chargeData = encodeFunctionData({
@@ -108,6 +129,28 @@ export async function runKeeperOnce(): Promise<void> {
       const op = await acc.buildAndSign(executeData, "qusdc");
       const hash = await qevieClient.bundler.sendUserOperation(op, CONTRACTS.entryPoint);
       console.log(`[keeper] submitted userOpHash=${hash}`);
+      const result = await qevieClient.bundler.waitForUserOp(hash);
+      if (result.status !== "mined" || result.txHash === null) {
+        console.error(`[keeper] charge for ${subId} did not mine successfully`);
+        continue;
+      }
+
+      await issueReceipt({
+        payer: sub.payer,
+        payee: payeeAddress,
+        token: CONTRACTS.qusdc,
+        amount: formatQusdc(sub.amount),
+        amountPrivate: false,
+        metadataHash: hashReceiptMetadata({
+          source: "subscription-keeper",
+          subId: subId.toString(),
+          paymentNumber: Number(sub.paymentsMade) + 1,
+          userOpHash: hash,
+          txHash: result.txHash,
+        }),
+        receiptType: "SUBSCRIPTION_PAYMENT",
+        paymentReference: result.txHash,
+      });
     } catch (e) {
       console.error(`[keeper] error charging ${subId}:`, e);
     }
@@ -126,4 +169,10 @@ export function startKeeper(): void {
   console.log(`[keeper] starting with poll interval ${POLL_INTERVAL_MS}ms`);
   void runKeeperOnce();
   setInterval(() => { void runKeeperOnce(); }, POLL_INTERVAL_MS);
+}
+
+function formatQusdc(amount: bigint): string {
+  const whole = amount / 1_000_000n;
+  const fraction = (amount % 1_000_000n).toString().padStart(6, "0").replace(/0+$/, "");
+  return fraction === "" ? whole.toString() : `${whole.toString()}.${fraction}`;
 }

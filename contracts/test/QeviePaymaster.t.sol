@@ -23,7 +23,7 @@ interface Vm {
 contract QeviePaymasterTest {
     Vm internal constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
-    uint256 internal constant SIGNER_KEY = 0xA11CE_1337;
+    uint256 internal constant SIGNER_KEY = 0xA11CE1337;
     address internal signer;
 
     MockEntryPoint internal ep;
@@ -35,7 +35,7 @@ contract QeviePaymasterTest {
 
     // 50k WQIE, 9k QUSDC → ~0.18 QUSDC per QIE
     uint112 internal constant WQIE_RESERVE = 50_000 ether;
-    uint112 internal constant QUSDC_RESERVE = 9_000e6;
+    uint112 internal constant QUSDC_RESERVE = 9000e6;
 
     function setUp() internal {
         signer = VM.addr(SIGNER_KEY);
@@ -62,11 +62,7 @@ contract QeviePaymasterTest {
     // Helper: build a minimal UserOperation for the paymaster
     // ---------------------------------------------------------------------------
 
-    function _buildModeAOp(address sender)
-        internal
-        view
-        returns (PackedUserOperation memory op)
-    {
+    function _buildModeAOp(address sender) internal view returns (PackedUserOperation memory op) {
         op.sender = sender;
         op.paymasterAndData = abi.encodePacked(
             address(pm), // [0:20]
@@ -99,14 +95,9 @@ contract QeviePaymasterTest {
         );
     }
 
-    function _signAllowlist(address sender, uint32 expiry)
-        internal
-        returns (bytes memory sig)
-    {
+    function _signAllowlist(address sender, uint32 expiry) internal returns (bytes memory sig) {
         bytes32 digest = keccak256(abi.encode(sender, expiry, block.chainid));
-        bytes32 ethDigest = keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n32", digest)
-        );
+        bytes32 ethDigest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", digest));
         (uint8 v, bytes32 r, bytes32 s) = VM.sign(SIGNER_KEY, ethDigest);
         sig = abi.encodePacked(r, s, v);
     }
@@ -310,8 +301,7 @@ contract QeviePaymasterTest {
 
         // Sign with a different key.
         bytes32 digest = keccak256(abi.encode(user, expiry, block.chainid));
-        bytes32 ethDigest =
-            keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", digest));
+        bytes32 ethDigest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", digest));
         (uint8 v, bytes32 r, bytes32 s) = VM.sign(0xDEAD, ethDigest);
         bytes memory sig = abi.encodePacked(r, s, v);
 
@@ -519,9 +509,8 @@ contract QeviePaymasterTest {
         setUp();
         PackedUserOperation memory op;
         op.sender = address(0xBEEF);
-        op.paymasterAndData = abi.encodePacked(
-            address(pm), uint128(200_000), uint128(100_000), uint8(0xFF)
-        );
+        op.paymasterAndData =
+            abi.encodePacked(address(pm), uint128(200_000), uint128(100_000), uint8(0xFF));
 
         VM.prank(address(ep));
         (, uint256 validData) = pm.validatePaymasterUserOp(op, bytes32(0), 0);

@@ -300,9 +300,7 @@ contract PaymentContractsTest {
         registry.register("alice_qie");
 
         string memory name = registry.reverseResolve(alice);
-        require(
-            keccak256(bytes(name)) == keccak256(bytes("alice_qie")), "reverse resolution wrong"
-        );
+        require(keccak256(bytes(name)) == keccak256(bytes("alice_qie")), "reverse resolution wrong");
     }
 
     function testCannotRegisterTakenUsername() external {

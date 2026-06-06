@@ -9,5 +9,11 @@
     "test": "pnpm -r test",
     "contracts:build": "forge build --offline --root contracts",
     "contracts:test": "forge test --offline --force --root contracts"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "^9.39.4",
+    "globals": "17.6.0",
+    "typescript-eslint": "8.60.1"
   }
 }

@@ -52,8 +52,7 @@ contract DeployAll {
 
         VM.startBroadcast(deployerKey);
 
-        QevieSmartAccountFactory factory =
-            new QevieSmartAccountFactory(IEntryPoint(entryPointAddr));
+        QevieSmartAccountFactory factory = new QevieSmartAccountFactory(IEntryPoint(entryPointAddr));
 
         QeviePaymaster paymaster = new QeviePaymaster(
             IEntryPoint(entryPointAddr),

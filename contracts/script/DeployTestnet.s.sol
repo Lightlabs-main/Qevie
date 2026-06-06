@@ -33,7 +33,7 @@ contract DeployTestnet {
 
     // Mirror mainnet WQIE/QUSDC reserves for realistic price simulation.
     uint112 private constant INIT_WQIE_RESERVE = 50_000 ether;
-    uint112 private constant INIT_QUSDC_RESERVE = 9_000e6;
+    uint112 private constant INIT_QUSDC_RESERVE = 9000e6;
 
     struct Deployed {
         address testQUSDC;
@@ -63,8 +63,7 @@ contract DeployTestnet {
         pair.setReserves(INIT_WQIE_RESERVE, INIT_QUSDC_RESERVE);
 
         // 3. Deploy smart account factory.
-        QevieSmartAccountFactory factory =
-            new QevieSmartAccountFactory(IEntryPoint(entryPointAddr));
+        QevieSmartAccountFactory factory = new QevieSmartAccountFactory(IEntryPoint(entryPointAddr));
 
         // 4. Deploy paymaster.
         QeviePaymaster paymaster = new QeviePaymaster(

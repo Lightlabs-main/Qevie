@@ -71,12 +71,10 @@ contract PaymentRequest {
     /// @param memo Arbitrary 32-byte label (store as UTF-8 left-padded off-chain).
     /// @param expiryDelta Seconds from now until the request expires (max MAX_EXPIRY).
     /// @return requestId The new request's ID.
-    function createRequest(
-        address payer,
-        uint256 amount,
-        bytes32 memo,
-        uint64 expiryDelta
-    ) external returns (uint256 requestId) {
+    function createRequest(address payer, uint256 amount, bytes32 memo, uint64 expiryDelta)
+        external
+        returns (uint256 requestId)
+    {
         if (amount == 0) revert ZeroAmount();
         if (expiryDelta > MAX_EXPIRY) revert ExpiryTooLong(uint64(block.timestamp) + expiryDelta);
 
