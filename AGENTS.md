@@ -56,23 +56,25 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
 -> Phase 6 Mainnet deploy + verify -> Phase 7 Ship.
 
 ## Status / Handoff (keep current)
-- Current phase: Phase 6 ready — testnet E2E proven, mainnet deploy next
-- 4337 vs relayer decision: ERC-4337 PASS — full gasless UserOp on testnet confirmed
-- Verified addresses: see VERIFICATION.md (testnet deployments + E2E proof tx)
-- What is running on VPS (38.49.209.149):
-  - React PWA: http://38.49.209.149:8080 (pm2: qevie-app)
-  - paymaster-service: http://38.49.209.149:3001 (pm2: qevie-paymaster)
-  - Voltaire bundler: http://38.49.209.149:4337/rpc (pm2: qevie-bundler)
-- Open blockers for Phase 6 (mainnet):
-  - QUSDC on mainnet = 0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5 (real, not stub)
-  - WQIE/QUSDC DEX pair on mainnet = 0x73a3cCF7da7e473ed2e9994aE764f0E30f4e4DFe
-  - Bundler gas estimate multiplier needs --gas-estimate-multiplier 400 (or higher) for QIE
-  - Run DeployAll.s.sol (not DeployTestnet.s.sol) for mainnet using real QUSDC + DEX pair
-  - Fund mainnet paymaster with real QIE after deploy
-- Next action:
-  1. Run contracts/script/DeployAll.s.sol on mainnet 1990 (uses real QUSDC + DEX pair)
-  2. Fund mainnet paymaster EntryPoint deposit (>= 10 QIE recommended)
-  3. Update MAINNET_CONTRACTS in sdk/src/contracts.ts
-  4. Rebuild app with VITE_USE_TESTNET=false, deploy to VPS
-  5. Run mainnet smoke test: prove gasless QUSDC transfer on chain 1990
-  6. Phase 7: publish @qevie/sdk to npm, finalize demo
+- Current phase: Phase 5 complete — App, SDK, Paymaster, and Payment contracts built and tested
+- 4337 vs relayer decision: ERC-4337 via Voltaire unsafe/no-trace bundler (direct handleOps smoke test confirmed on testnet)
+- Verified addresses: see VERIFICATION.md
+- Open blockers: 
+  - Phase 2-3 contracts not yet deployed on testnet (run DeployAll.s.sol with funded key)
+  - Paymaster needs funded EntryPoint deposit before gasless ops work
+  - QIE Pass on-chain gating unavailable; using QIE Domain + signed allowlist fallback
+  - Real bundler (Voltaire) E2E not yet tested through full UserOp lifecycle
+- What is built and tested:
+  - Contracts: QevieSmartAccount, Factory, QeviePaymaster (Mode A + B), BatchPayments, 
+    PaymentRequest, SubscriptionManager, UsernameRegistry — 44 tests all passing
+  - SDK: @qevie/sdk core + React hooks — builds ESM+CJS, typechecks clean
+  - App: React PWA with all pages (Onboarding, Home, Send, Request, Scan, Batch, 
+    Subscriptions, Dashboard, Profile, PayLink) — typechecks clean
+  - paymaster-service: allowlist token API + subscription keeper — typechecks clean
+  - infra: Voltaire bundler docker-compose (unsafe mode)
+- Next action: 
+  1. Deploy Phase 2-3 contracts on testnet with funded deployer
+  2. Fund paymaster EntryPoint deposit
+  3. Run Voltaire bundler + end-to-end gasless UserOp test
+  4. Phase 6: Redeploy audited contracts to mainnet 1990
+  5. Phase 7: Ship — fund mainnet paymaster, set trusted signer, launch app

@@ -202,58 +202,6 @@ This proves the Phase 1 AA core path on QIE testnet: EntryPoint v0.7, counterfac
 
 This does not yet prove paymaster-funded gasless stablecoin payment. Paymaster work starts in Phase 2.
 
-## Phases 2-6 Testnet Deployment (2026-06-04)
-
-### QIE Testnet (1983) Contract Addresses
-
-| Contract | Address | Explorer |
-| --- | --- | --- |
-| EntryPoint v0.7 | `0xa07d2Ff33400fbE2c741385cb959D5BCbA041493` | https://testnet.qie.digital/address/0xa07d2Ff33400fbE2c741385cb959D5BCbA041493 |
-| QevieSmartAccountFactory | `0x9E87eBcde02fc7c3729863D7C371030F8101E7CE` | https://testnet.qie.digital/address/0x9E87eBcde02fc7c3729863D7C371030F8101E7CE |
-| QeviePaymaster | `0x1cdD6BC4258F590E0ea2b10E82a8162384d7f5f2` | https://testnet.qie.digital/address/0x1cdD6BC4258F590E0ea2b10E82a8162384d7f5f2 |
-| BatchPayments | `0xb07fff088D37355EAD2f4226e208DAA32f7b6a19` | https://testnet.qie.digital/address/0xb07fff088D37355EAD2f4226e208DAA32f7b6a19 |
-| PaymentRequest | `0x9ee2d86248F3811E6e63d7C7F025E717AAE877aB` | https://testnet.qie.digital/address/0x9ee2d86248F3811E6e63d7C7F025E717AAE877aB |
-| SubscriptionManager | `0x0705e239bF3F8250DADA4aad1051C33C32fb988a` | https://testnet.qie.digital/address/0x0705e239bF3F8250DADA4aad1051C33C32fb988a |
-| UsernameRegistry | `0x82f50077a8cB6988DF4bBB9B8BD9f92F95975bF4` | https://testnet.qie.digital/address/0x82f50077a8cB6988DF4bBB9B8BD9f92F95975bF4 |
-| TestQUSDC (testnet stub) | `0x850E073f0E7536A03fE22DB0CFBeA08e6DB3e18f` | https://testnet.qie.digital/address/0x850E073f0E7536A03fE22DB0CFBeA08e6DB3e18f |
-| TestDexPair (testnet stub) | `0xd94975d051634C4422D84dA9D4D89DC9Fb00DC5F` | https://testnet.qie.digital/address/0xd94975d051634C4422D84dA9D4D89DC9Fb00DC5F |
-
-Paymaster trusted signer: `0x7827C8E29CC81BB70FA2DEc862De722305a3050d`
-Paymaster EntryPoint deposit: 1 QIE (funded 2026-06-04)
-
-### E2E Gasless UserOperation Smoke Test (Phase 1 GO/NO-GO → PASS)
-
-Script: `contracts/script/E2EGaslessTest.s.sol`
-
-Date: 2026-06-04
-
-Result:
-- Smart account `0x04045e066bd061B2F80aa38d3fBDce96CA078Fa8` deployed counterfactually on first UserOp
-- Paymaster Mode B (sponsored, signed allowlist): `validatePaymasterUserOp` returned valid ✓
-- QUSDC transferred to recipient `0xCAFEBABE`: `1,000,000` (1 QUSDC) ✓
-- Paymaster `sponsoredOpsCount` for smart account: 1 ✓
-- Transaction: `0x4cdfda2ffbd3e1ec6d641304c8a277c8f196f27e24d77a40053bdc38e87c4a34`
-- Explorer: https://testnet.qie.digital/tx/0x4cdfda2ffbd3e1ec6d641304c8a277c8f196f27e24d77a40053bdc38e87c4a34
-
-**This proves the complete ERC-4337 gasless flow on QIE testnet:**
-- User holds ZERO native QIE
-- Paymaster sponsors gas (Mode B)
-- Smart account deploys + executes QUSDC transfer in a single UserOperation
-- EntryPoint validates account signature + paymaster signature, executes, postOp runs
-
-GO/NO-GO decision: **ERC-4337 PASS** — proceed with ERC-4337 path (not EIP-2771 fallback).
-
-### Infrastructure Running on VPS (38.49.209.149)
-
-| Service | URL | pm2 name |
-| --- | --- | --- |
-| React PWA (qevie app) | http://38.49.209.149:8080 | qevie-app |
-| paymaster-service API | http://38.49.209.149:3001/health | qevie-paymaster |
-| Voltaire bundler (v0.7, unsafe) | http://38.49.209.149:4337/rpc | qevie-bundler |
-
-Note: Voltaire patched to use our deployed EntryPoint `0xa07d2Ff33400fbE2c741385cb959D5BCbA041493` instead of the canonical address (which is not deployed on QIE).
-Note: Public QIE RPCs do not support `debug_traceCall`; bundler runs in unsafe mode (`--unsafe --disable_v6`).
-
 ## Phase 2-5 Build Progress
 
 Date: 2026-06-04

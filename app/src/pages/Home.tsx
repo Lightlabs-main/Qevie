@@ -47,50 +47,64 @@ export default function Home(): React.ReactElement {
   const shortAddr = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "";
 
   const actions = [
-    { to: "/send", icon: "↑", label: "Send",   color: "#7c3aed" },
-    { to: "/links", icon: "🔗", label: "Links",  color: "#db2777" },
-    { to: "/batch", icon: "⊛", label: "Batch",  color: "#0891b2" },
-    { to: "/scan",  icon: "⊞", label: "Scan",   color: "#059669" },
+    { to: "/send", icon: "↑", label: "Send", color: "var(--accent)" },
+    { to: "/links", icon: "🔗", label: "Links", color: "#38bdf8" },
+    { to: "/batch", icon: "⊛", label: "Batch", color: "#2dd4bf" },
+    { to: "/scan", icon: "⊞", label: "Scan", color: "#10b981" },
   ];
 
   return (
     <main className="page fade-in">
       {/* Top bar */}
-      <div className="flex-between" style={{ paddingTop: "0.5rem", marginBottom: "1.25rem" }}>
-        <div>
-          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 500 }}>
-            {APP_CONFIG.chainId === 1990 ? "QIE Mainnet" : "QIE Testnet"}
+      <div className="flex-between" style={{ paddingTop: "0.5rem", marginBottom: "1.5rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: "10px",
+            background: "var(--surface-2)", border: "1px solid var(--border-2)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "var(--shadow)"
+          }}>
+            <span style={{ fontSize: "1.25rem" }}>⚡</span>
           </div>
-          <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-2)" }} className="mono">
-            {shortAddr}
+          <div>
+            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {APP_CONFIG.chainId === 1990 ? "QIE Mainnet" : "QIE Testnet"}
+            </div>
+            <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text)" }} className="mono">
+              {shortAddr}
+            </div>
           </div>
         </div>
         <Link to="/profile" style={{
-          width: 38, height: 38, borderRadius: "50%",
-          background: "var(--gradient)", display: "flex",
-          alignItems: "center", justifyContent: "center",
-          fontSize: "1rem", color: "#fff", textDecoration: "none",
-          boxShadow: "0 2px 12px var(--accent-glow)",
-        }}>👤</Link>
+          width: 42, height: 42, borderRadius: "14px",
+          background: "var(--surface-2)", border: "1px solid var(--border-2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: "1.25rem", color: "#fff", textDecoration: "none",
+          boxShadow: "var(--shadow)", transition: "transform 0.2s"
+        }} onMouseEnter={(e) => e.currentTarget.style.transform = "translateY(-2px)"}
+          onMouseLeave={(e) => e.currentTarget.style.transform = "translateY(0)"}>👤</Link>
       </div>
 
       {/* Balance card */}
-      <div className="card-gradient mb-4" style={{ textAlign: "center" }}>
-        <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.75rem" }}>
-          QUSDC Balance
+      <div className="card-gradient mb-6" style={{
+        textAlign: "center", padding: "2rem 1.5rem",
+        boxShadow: "0 20px 40px rgba(0,0,0,0.4), inset 0 0 80px rgba(6,182,212,0.05)"
+      }}>
+        <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--accent-light)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem", opacity: 0.8 }}>
+          Available Balance
         </div>
         {loading ? (
-          <div style={{ padding: "1rem 0" }}>
-            <span className="spinner spinner-lg" style={{ borderTopColor: "var(--accent-light)" }} />
+          <div style={{ padding: "1.5rem 0" }}>
+            <span className="spinner spinner-lg" />
           </div>
         ) : (
           <>
-            <div className="amount-big">${usd ?? "—"}</div>
-            <div className="amount-currency">QUSDC · QIE Network</div>
+            <div className="amount-big" style={{ marginBottom: "0.25rem" }}>${usd ?? "—"}</div>
+            <div className="amount-currency" style={{ color: "var(--text-2)", fontWeight: 500 }}>QUSDC · QIE Network</div>
             {freeOps !== null && freeOps > 0 && (
-              <div style={{ marginTop: "1rem" }}>
-                <span className="chip chip-success">
-                  ⚡ {freeOps} free transaction{freeOps !== 1 ? "s" : ""} left
+              <div style={{ marginTop: "1.25rem" }}>
+                <span className="chip chip-success" style={{ padding: "0.4rem 0.8rem", borderRadius: "10px" }}>
+                  <span style={{ fontSize: "1rem", marginRight: "0.25rem" }}>⚡</span> {freeOps} free operations
                 </span>
               </div>
             )}
@@ -102,58 +116,65 @@ export default function Home(): React.ReactElement {
             target="_blank"
             rel="noreferrer"
             style={{
-              display: "inline-flex", alignItems: "center", gap: "0.3rem",
+              display: "inline-flex", alignItems: "center", gap: "0.4rem",
               fontSize: "0.75rem", color: "var(--text-muted)",
-              marginTop: "0.875rem", textDecoration: "none",
+              marginTop: "1.5rem", textDecoration: "none", fontWeight: 600,
+              padding: "0.5rem 1rem", background: "var(--bg)", borderRadius: "8px",
+              border: "1px solid var(--border)"
             }}
           >
-            View on explorer →
+            Explorer <span style={{ opacity: 0.5 }}>↗</span>
           </a>
         )}
       </div>
 
       {/* Quick actions */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.625rem", marginBottom: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "2rem" }}>
         {actions.map((a) => (
           <Link key={a.to} to={a.to} style={{
             display: "flex", flexDirection: "column", alignItems: "center",
-            gap: "0.5rem", textDecoration: "none",
-            background: "var(--surface)", border: "1px solid var(--border)",
-            borderRadius: "var(--radius)", padding: "0.875rem 0.5rem",
-            color: "var(--text-2)", transition: "border-color 0.15s, background 0.15s",
-          }}>
+            gap: "0.6rem", textDecoration: "none",
+            background: "var(--surface-2)", border: "1px solid var(--border)",
+            borderRadius: "var(--radius)", padding: "1rem 0.5rem",
+            color: "var(--text-2)", transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+          }} className="action-card">
             <div style={{
-              width: 40, height: 40, borderRadius: "12px",
-              background: `${a.color}1a`,
+              width: 44, height: 44, borderRadius: "12px",
+              background: `${a.color}15`,
+              border: `1px solid ${a.color}30`,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: "1.25rem", color: a.color,
+              boxShadow: `0 8px 16px ${a.color}10`
             }}>{a.icon}</div>
-            <span style={{ fontSize: "0.75rem", fontWeight: 600 }}>{a.label}</span>
+            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-2)" }}>{a.label}</span>
           </Link>
         ))}
       </div>
 
       {/* Subscriptions teaser */}
-      <div className="flex-between mb-3">
-        <h2 style={{ fontSize: "1rem" }}>Recurring</h2>
-        <Link to="/subscriptions" className="text-accent" style={{ fontSize: "0.8125rem", textDecoration: "none" }}>
-          Manage →
+      <div className="flex-between mb-4">
+        <h2 style={{ fontSize: "1.125rem", fontWeight: 700 }}>Recurring Payments</h2>
+        <Link to="/subscriptions" className="text-accent" style={{ fontSize: "0.875rem", textDecoration: "none", fontWeight: 600 }}>
+          View All
         </Link>
       </div>
-      <div className="card" style={{ textAlign: "center", padding: "1.75rem" }}>
-        <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🔄</div>
-        <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>No active subscriptions</div>
-        <p className="text-muted" style={{ fontSize: "0.8125rem" }}>
-          Set up recurring payments to pay anyone automatically.
+      <div className="card-elevated" style={{ textAlign: "center", padding: "2rem", background: "var(--surface)" }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: "16px",
+          background: "var(--accent-dim)", color: "var(--accent)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: "1.75rem", margin: "0 auto 1.25rem",
+          border: "1px solid var(--border-2)"
+        }}>🔄</div>
+        <div style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.5rem" }}>No active streams</div>
+        <p className="text-muted" style={{ fontSize: "0.875rem", maxWidth: "240px", margin: "0 auto 1.5rem", lineHeight: 1.6 }}>
+          Automate your bills and payroll with recurring stablecoin streams.
         </p>
-        <Link to="/subscriptions" className="btn-ghost btn-sm" style={{
-          display: "inline-flex", marginTop: "1rem",
-          borderRadius: "var(--radius-sm)", padding: "0.5rem 1rem",
-          background: "var(--accent-dim)", border: "1px solid rgba(124,58,237,0.3)",
-          color: "var(--accent-light)", fontSize: "0.8125rem", fontWeight: 600,
-          textDecoration: "none",
+        <Link to="/subscriptions" className="btn-primary" style={{
+          padding: "0.75rem 1.5rem", fontSize: "0.875rem", fontWeight: 700,
+          borderRadius: "12px", textDecoration: "none"
         }}>
-          Set up →
+          New Stream
         </Link>
       </div>
     </main>
