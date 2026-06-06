@@ -26,6 +26,45 @@ interface Eip1193 {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
 }
 
+interface ChainConfig {
+  chainId: number;
+  chainName: string;
+  rpcUrls: string[];
+  blockExplorerUrls: string[];
+  nativeCurrency: {
+    name: string;
+    symbol: string;
+    decimals: number;
+  };
+}
+
+const TARGET_CHAIN: ChainConfig = APP_CONFIG.chainId === 1990
+  ? {
+    chainId: 1990,
+    chainName: "QIE Mainnet",
+    rpcUrls: [APP_CONFIG.rpcUrl],
+    blockExplorerUrls: ["https://mainnet.qie.digital"],
+    nativeCurrency: { name: "QIE", symbol: "QIE", decimals: 18 },
+  }
+  : {
+    chainId: 1983,
+    chainName: "QIE Testnet",
+    rpcUrls: [APP_CONFIG.rpcUrl],
+    blockExplorerUrls: ["https://testnet.qie.digital"],
+    nativeCurrency: { name: "QIE", symbol: "QIE", decimals: 18 },
+  };
+
+function describeProviderError(error: unknown): string {
+  const maybeCode = (error as { code?: number }).code;
+  const message = error instanceof Error ? error.message : String(error);
+  if (maybeCode === 4001) return "Network switch was rejected in the wallet.";
+  if (maybeCode === 4902) return "QIE Testnet is not added in the wallet yet.";
+  if (/unsupported|not support|not implemented/i.test(message)) {
+    return "This wallet does not support automatic network switching.";
+  }
+  return message && message !== "[object Object]" ? message : "Automatic network switch failed.";
+}
+
 export default function Dashboard(): React.ReactElement {
   const client = useQevieClient();
   const { address, signerAddress, disconnect } = useWallet();
@@ -38,6 +77,8 @@ export default function Dashboard(): React.ReactElement {
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [walletChainId, setWalletChainId] = useState<number | null>(null);
+  const [switchingNetwork, setSwitchingNetwork] = useState(false);
 
   const isTestnet = APP_CONFIG.chainId === 1983;
   const explorerBase = APP_CONFIG.chainId === 1990
@@ -83,6 +124,67 @@ export default function Dashboard(): React.ReactElement {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  const detectWalletChain = useCallback(async (): Promise<void> => {
+    const eth = (window as typeof window & { ethereum?: Eip1193 }).ethereum;
+    if (eth === undefined) return;
+    try {
+      const chainHex = await eth.request({ method: "eth_chainId" }) as string;
+      setWalletChainId(parseInt(chainHex, 16));
+    } catch {
+      setWalletChainId(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void detectWalletChain();
+  }, [detectWalletChain]);
+
+  const handleSwitchNetwork = async (): Promise<void> => {
+    const eth = (window as typeof window & { ethereum?: Eip1193 }).ethereum;
+    if (eth === undefined) {
+      setError("No wallet provider found");
+      return;
+    }
+
+    setSwitchingNetwork(true);
+    setError(null);
+    setMsg(null);
+    try {
+      const chainHex = `0x${TARGET_CHAIN.chainId.toString(16)}`;
+      try {
+        await eth.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: chainHex,
+            chainName: TARGET_CHAIN.chainName,
+            rpcUrls: TARGET_CHAIN.rpcUrls,
+            blockExplorerUrls: TARGET_CHAIN.blockExplorerUrls,
+            nativeCurrency: TARGET_CHAIN.nativeCurrency,
+          }],
+        });
+      } catch (addError) {
+        const code = (addError as { code?: number }).code;
+        const message = addError instanceof Error ? addError.message : String(addError);
+        if (code !== 4902 && !/already exists|already added|known chain|chain.*exists/i.test(message)) {
+          throw addError;
+        }
+      }
+
+      await eth.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: chainHex }],
+      });
+      setWalletChainId(TARGET_CHAIN.chainId);
+      setMsg(`Wallet switched to ${TARGET_CHAIN.chainName}.`);
+    } catch (e) {
+      setError(describeProviderError(e));
+    } finally {
+      setSwitchingNetwork(false);
+    }
+  };
+
+  const wrongWalletNetwork = walletChainId !== null && walletChainId !== APP_CONFIG.chainId;
+
   const handleFaucet = async (): Promise<void> => {
     if (address === null || signerAddress === null) { setError("Wallet not connected"); return; }
     const eth = (window as typeof window & { ethereum?: Eip1193 }).ethereum;
@@ -93,8 +195,10 @@ export default function Dashboard(): React.ReactElement {
       // The faucet runs as normal transactions from your connected EOA (gas paid
       // from your QIE), since the smart account can't self-fund its first QIE.
       const chainHex = (await eth.request({ method: "eth_chainId" })) as string;
-      if (parseInt(chainHex, 16) !== APP_CONFIG.chainId) {
-        setError(`Switch your wallet to QIE Testnet (1983). It's on chain ${parseInt(chainHex, 16)}.`);
+      const currentChainId = parseInt(chainHex, 16);
+      setWalletChainId(currentChainId);
+      if (currentChainId !== APP_CONFIG.chainId) {
+        setError(`Wallet is on chain ${currentChainId}. Switch to ${TARGET_CHAIN.chainName} (${TARGET_CHAIN.chainId}) to use the faucet.`);
         return;
       }
 
@@ -184,16 +288,50 @@ export default function Dashboard(): React.ReactElement {
             <p className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>Testnet faucet</p>
             <span className="text-muted" style={{ fontSize: "0.75rem" }}>100 QUSDC + gas</span>
           </div>
+          {wrongWalletNetwork && (
+            <div
+              style={{
+                marginBottom: "0.75rem",
+                padding: "0.8rem 0.9rem",
+                borderRadius: "14px",
+                border: "1px solid rgba(244, 63, 94, 0.35)",
+                background: "rgba(244, 63, 94, 0.08)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text)" }}>
+                Wallet network mismatch. Faucet needs {TARGET_CHAIN.chainName}.
+              </p>
+              <p className="text-muted" style={{ margin: "0.35rem 0 0" }}>
+                Current chain: {walletChainId}
+              </p>
+              <div className="text-muted" style={{ marginTop: "0.5rem", fontSize: "0.72rem", lineHeight: 1.55 }}>
+                Target chain ID: {TARGET_CHAIN.chainId}<br />
+                RPC: {TARGET_CHAIN.rpcUrls[0]}
+              </div>
+            </div>
+          )}
           <button
             className="btn-primary"
             onClick={() => { void handleFaucet(); }}
-            disabled={minting}
+            disabled={minting || wrongWalletNetwork}
             style={{ width: "100%" }}
           >
             {minting
               ? <><span className="spinner" style={{ width: 16, height: 16 }} /> Minting…</>
               : "Get test funds"}
           </button>
+          {wrongWalletNetwork && (
+            <button
+              className="btn-secondary"
+              onClick={() => { void handleSwitchNetwork(); }}
+              disabled={switchingNetwork}
+              style={{ width: "100%", marginTop: "0.75rem" }}
+            >
+              {switchingNetwork
+                ? <><span className="spinner" style={{ width: 16, height: 16 }} /> Switching…</>
+                : `Switch to ${TARGET_CHAIN.chainName}`}
+            </button>
+          )}
           {msg !== null && <p style={{ color: "var(--success, #16a34a)", fontSize: "0.8rem", marginTop: "0.75rem" }}>{msg}</p>}
           {error !== null && <p style={{ color: "var(--error)", fontSize: "0.8rem", marginTop: "0.75rem" }}>{error}</p>}
         </div>

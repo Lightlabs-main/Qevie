@@ -11,8 +11,8 @@ import {
 import { APP_CONFIG } from "../config.js";
 
 const LINKS_STORAGE_KEY = "qevie_history_links_v1";
-const HISTORY_BLOCK_WINDOW = 250_000n;
-const FEED_BLOCK_WINDOW = 50_000n;
+const HISTORY_BLOCK_WINDOW = 60_000n;
+const FEED_BLOCK_WINDOW = 20_000n;
 const MAX_LOG_BLOCK_SPAN = 9_000n;
 
 const TRANSFER_EVENT = parseAbiItem(

@@ -39,17 +39,29 @@ export default function History(): React.ReactElement {
       setLoading(true);
       setError(null);
       try {
-        const [nextLinks, nextRequests, nextBatches, nextFeed] = await Promise.all([
-          getLinkHistory(client, address),
-          getRequestHistory(client, address),
-          getBatchHistory(client, address),
-          getGlobalFeed(client),
+        const results = await Promise.allSettled([
+          withTimeout(getLinkHistory(client, address), 12_000),
+          withTimeout(getRequestHistory(client, address), 12_000),
+          withTimeout(getBatchHistory(client, address), 12_000),
+          withTimeout(getGlobalFeed(client), 12_000),
         ]);
         if (!mounted) return;
-        setLinks(nextLinks);
-        setRequests(nextRequests);
-        setBatches(nextBatches);
-        setFeed(nextFeed);
+        const [nextLinks, nextRequests, nextBatches, nextFeed] = results;
+        setLinks(nextLinks.status === "fulfilled" ? nextLinks.value : []);
+        setRequests(nextRequests.status === "fulfilled" ? nextRequests.value : []);
+        setBatches(nextBatches.status === "fulfilled" ? nextBatches.value : []);
+        setFeed(nextFeed.status === "fulfilled" ? nextFeed.value : []);
+
+        const failures = [
+          nextLinks,
+          nextRequests,
+          nextBatches,
+          nextFeed,
+        ].filter((result) => result.status === "rejected");
+
+        if (failures.length > 0) {
+          setError("Some history data took too long to load. Showing available results.");
+        }
       } catch (e) {
         if (!mounted) return;
         setError(e instanceof Error ? e.message : "Failed to load history");
@@ -100,16 +112,21 @@ export default function History(): React.ReactElement {
       </div>
 
       {loading && (
-        <div className="flex-center" style={{ minHeight: "30vh" }}>
-          <span className="spinner spinner-lg" />
+        <div className="surface-card" style={{ marginBottom: "var(--s-3)" }}>
+          <div className="flex-center" style={{ gap: "0.65rem", justifyContent: "flex-start" }}>
+            <span className="spinner" />
+            <span className="text-muted" style={{ fontSize: "0.8125rem" }}>
+              Loading recent history…
+            </span>
+          </div>
         </div>
       )}
 
-      {!loading && error !== null && (
+      {error !== null && (
         <div className="alert alert-error">{error}</div>
       )}
 
-      {!loading && error === null && tab === "overview" && (
+      {tab === "overview" && (
         <div className="tight-stack">
           <section className="surface-card">
             <div className="section-label">Live app feed</div>
@@ -150,7 +167,7 @@ export default function History(): React.ReactElement {
         </div>
       )}
 
-      {!loading && error === null && tab === "links" && (
+      {tab === "links" && (
         <section className="tight-stack">
           {links.length === 0 ? <EmptyState label="No payment links created yet." /> : links.map((item) => (
             <LinkRow key={item.id} item={item} />
@@ -158,7 +175,7 @@ export default function History(): React.ReactElement {
         </section>
       )}
 
-      {!loading && error === null && tab === "requests" && (
+      {tab === "requests" && (
         <section className="tight-stack">
           {requests.length === 0 ? <EmptyState label="No request history found for this wallet." /> : requests.map((item) => (
             <RequestRow key={item.requestId.toString()} item={item} />
@@ -166,7 +183,7 @@ export default function History(): React.ReactElement {
         </section>
       )}
 
-      {!loading && error === null && tab === "batches" && (
+      {tab === "batches" && (
         <section className="tight-stack">
           {batches.length === 0 ? <EmptyState label="No batch payments found for this wallet." /> : batches.map((item) => (
             <BatchRow key={item.batchId} item={item} />
@@ -175,6 +192,25 @@ export default function History(): React.ReactElement {
       )}
     </main>
   );
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return await new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error(`Timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    void promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timeoutId);
+        reject(error);
+      },
+    );
+  });
 }
 
 function MetricCard({ label, value }: { label: string; value: string }): React.ReactElement {
