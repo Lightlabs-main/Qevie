@@ -3,7 +3,7 @@ import { useWallet } from "../hooks/useWallet.js";
 import Logo from "../components/Logo.js";
 
 export default function Onboarding(): React.ReactElement {
-  const { connect, isConnecting, error } = useWallet();
+  const { connect, isConnecting, error, needsWalletApp, walletDeepLink } = useWallet();
 
   return (
     <div className="flex-center" style={{ minHeight: "100dvh", background: "var(--bg)" }}>
@@ -48,6 +48,17 @@ export default function Onboarding(): React.ReactElement {
           </button>
 
           {error && <div className="alert alert-error" style={{ marginTop: "var(--s-2)" }}>{error}</div>}
+
+          {needsWalletApp && (
+            <div className="tight-stack" style={{ marginTop: "var(--s-2)" }}>
+              <a className="btn-secondary btn-lg" href={walletDeepLink} style={{ textAlign: "center", textDecoration: "none" }}>
+                Open in MetaMask
+              </a>
+              <p className="text-muted" style={{ fontSize: "0.75rem", textAlign: "center" }}>
+                Or open this page from inside the QIE Wallet app&apos;s browser.
+              </p>
+            </div>
+          )}
 
           <div className="flex-center" style={{ marginTop: "var(--s-4)", opacity: 0.4 }}>
             <span style={{ fontSize: "0.625rem", fontWeight: 800, letterSpacing: "0.2em" }}>POWERED BY QIE FOUNDATION // 2026</span>
