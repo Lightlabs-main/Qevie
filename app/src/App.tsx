@@ -39,20 +39,22 @@ export default function App(): React.ReactElement {
 
   return (
     <>
-      <Suspense fallback={<LoadingPage />}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/send" element={<Send />} />
-          <Route path="/links" element={<PaymentLinks />} />
-          <Route path="/scan" element={<Scan />} />
-          <Route path="/batch" element={<BatchPay />} />
-          <Route path="/subscriptions" element={<Subscriptions />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/pay" element={<PayLink />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+      <div className="app-container page-center">
+        <Suspense fallback={<LoadingPage />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/send" element={<Send />} />
+            <Route path="/links" element={<PaymentLinks />} />
+            <Route path="/scan" element={<Scan />} />
+            <Route path="/batch" element={<BatchPay />} />
+            <Route path="/subscriptions" element={<Subscriptions />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/pay" element={<PayLink />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </div>
       <BottomNav />
     </>
   );
