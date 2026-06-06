@@ -26,6 +26,9 @@ export const PORT = Number(optionalEnv("PORT", "3001"));
 
 /** Private key for the paymaster-service signer (used for allowlist token signing). */
 export const SIGNER_PRIVATE_KEY = (): string => requireEnv("PAYMASTER_SIGNER_PRIVATE_KEY");
+export const RECEIPT_ISSUER_PRIVATE_KEY = (): string =>
+  process.env["RECEIPT_ISSUER_PRIVATE_KEY"] ?? SIGNER_PRIVATE_KEY();
+export const RECEIPT_REGISTRY_ADDRESS = process.env["RECEIPT_REGISTRY_ADDRESS"] as Address | undefined;
 
 export const CONTRACTS = (CHAIN_ID === 1983 ? TESTNET_CONTRACTS : MAINNET_CONTRACTS) as QevieContracts;
 

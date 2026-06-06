@@ -10,6 +10,10 @@ const Scan = lazy(() => import("./pages/Scan.js"));
 const Subscriptions = lazy(() => import("./pages/Subscriptions.js"));
 const Dashboard = lazy(() => import("./pages/Dashboard.js"));
 const Profile = lazy(() => import("./pages/Profile.js"));
+const History = lazy(() => import("./pages/History.js"));
+const Passport = lazy(() => import("./pages/Passport.js"));
+const ReceiptDetail = lazy(() => import("./pages/ReceiptDetail.js"));
+const Developers = lazy(() => import("./pages/Developers.js"));
 const Onboarding = lazy(() => import("./pages/Onboarding.js"));
 const PayLink = lazy(() => import("./pages/PayLink.js"));
 const BatchPay = lazy(() => import("./pages/BatchPay.js"));
@@ -50,6 +54,11 @@ export default function App(): React.ReactElement {
             <Route path="/subscriptions" element={<Subscriptions />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/passport" element={<Passport />} />
+            <Route path="/passport/:accountOrUsername" element={<Passport />} />
+            <Route path="/receipt/:receiptId" element={<ReceiptDetail />} />
+            <Route path="/developers" element={<Developers />} />
             <Route path="/pay" element={<PayLink />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

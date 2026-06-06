@@ -239,6 +239,41 @@ HTTP API + subscription keeper at `paymaster-service/`. Provides `POST /allowlis
    - `DEX_PAIR_ADDRESS=0x73a3cCF7da7e473ed2e9994aE764f0E30f4e4DFe`
    - `TRUSTED_SIGNER_ADDRESS=<paymaster-service signing key address>`
 
+## Passport / Receipt Extension Status
+
+Date: 2026-06-06
+
+Implemented locally:
+
+- `contracts/src/receipts/ReceiptRegistry.sol`
+- `contracts/test/ReceiptRegistry.t.sol`
+- SDK receipt/passport read/write helpers
+- App routes: `/history`, `/passport`, `/passport/:accountOrUsername`, `/receipt/:receiptId`, `/developers`
+- paymaster-service `POST /receipts` issuer endpoint
+
+Verification status:
+
+- `ReceiptRegistry` is deployed to QIE testnet and recorded below.
+- Mainnet deployment is still pending.
+- App/UI receipt and passport features remain env-gated and must use only the verified address recorded here.
+
+Safe fallback:
+
+- Existing payment flows remain usable without receipts.
+- If `ReceiptRegistry` is unset, the app must show receipt/passport features as unavailable rather than fabricate data.
+
+### ReceiptRegistry Testnet Deployment
+
+| Component | Address | Tx Hash | Status |
+| --- | --- | --- | --- |
+| ReceiptRegistry | `0x0FB5eBd1821d644E1faba9608255E30b3c44a6ba` | `0x17b71954b4d720e4bd9cfbc568aaaa02ba7015405b3d3bf473913832c704711b` | Deployed on QIE testnet |
+| ReceiptRegistry issuer authorization (`0x7827C8E29CC81BB70FA2DEc862De722305a3050d`) | `0x0FB5eBd1821d644E1faba9608255E30b3c44a6ba` | `0x7ec474623fbc2d99aad16aff2793391abb4f848b5990ac016449318b45e3dd99` | Authorized on-chain |
+
+Observed via RPC:
+
+- `owner()` = `0xfF88D1Fd6BEf257d8E76c035B6229700B23167e1`
+- `authorizedIssuers(0x7827C8E29CC81BB70FA2DEc862De722305a3050d)` = `true`
+
 2. Fund `QeviePaymaster` EntryPoint deposit: `entryPoint.depositTo{value: 1 ether}(paymasterAddress)`.
 
 3. Test Mode B allowlist token issuance via paymaster-service API.

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import type { UserOpResult } from "@qevie/sdk";
+import type { CreateReceiptResult } from "@qevie/sdk";
 import { APP_CONFIG } from "../config.js";
 import { gaslessParams } from "../lib/gasless.js";
 
@@ -19,6 +20,7 @@ export default function BatchPay(): React.ReactElement {
   const [memo, setMemo] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<UserOpResult | null>(null);
+  const [receipts, setReceipts] = useState<CreateReceiptResult[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const addRow = (): void => setRows((p) => [...p, { to: "", amount: "" }]);
@@ -40,6 +42,25 @@ export default function BatchPay(): React.ReactElement {
         memo: memo.trim() || undefined, ...gas,
       });
       setResult(res);
+      if (APP_CONFIG.contracts.receiptRegistry !== undefined && res.txHash !== null) {
+        const txHash = res.txHash;
+        const created = await Promise.allSettled(validRows.map((row) => client.createReceipt({
+          payer: address,
+          payee: row.to.trim() as `0x${string}`,
+          token: APP_CONFIG.contracts.qusdc,
+          amount: row.amount,
+          amountPrivate: false,
+          receiptType: "BATCH_PAYMENT",
+          paymentReference: txHash,
+          metadata: {
+            memo: memo.trim() || null,
+            source: "batch-flow",
+            recipient: row.to.trim(),
+            txHash,
+          },
+        })));
+        setReceipts(created.flatMap((item) => item.status === "fulfilled" ? [item.value] : []));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Batch payment failed");
     } finally { setLoading(false); }
@@ -57,6 +78,11 @@ export default function BatchPay(): React.ReactElement {
               className="chip chip-accent" style={{ display: "inline-flex", marginTop: "1.5rem", textDecoration: "none" }}>
               View transaction →
             </a>
+          )}
+          {receipts.length > 0 && (
+            <p className="text-muted" style={{ marginTop: "0.75rem", fontSize: "0.8125rem" }}>
+              {receipts.length} receipt{receipts.length === 1 ? "" : "s"} created for this batch.
+            </p>
           )}
           <button className="btn-secondary btn-lg" onClick={() => { setResult(null); setRows([{ to: "", amount: "" }]); }} style={{ marginTop: "2rem" }}>
             New batch

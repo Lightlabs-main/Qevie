@@ -56,7 +56,7 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
 -> Phase 6 Mainnet deploy + verify -> Phase 7 Ship.
 
 ## Status / Handoff (keep current)
-- Current phase: Phase 5 complete — App, SDK, Paymaster, and Payment contracts built and tested
+- Current phase: Phase 5 complete — App, SDK, Paymaster, and Payment contracts built and tested; Passport/Receipt extension implemented locally and in the app build
 - 4337 vs relayer decision: ERC-4337 via Voltaire unsafe/no-trace bundler (direct handleOps smoke test confirmed on testnet)
 - Verified addresses: see VERIFICATION.md
 - Open blockers: 
@@ -64,17 +64,19 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
   - Paymaster needs funded EntryPoint deposit before gasless ops work
   - QIE Pass on-chain gating unavailable; using QIE Domain + signed allowlist fallback
   - Real bundler (Voltaire) E2E not yet tested through full UserOp lifecycle
+  - ReceiptRegistry is implemented but not yet deployed and verified on QIE; Passport/Receipt UI stays config-gated until `VITE_RECEIPT_REGISTRY_ADDRESS` is set to a verified deployment
 - What is built and tested:
   - Contracts: QevieSmartAccount, Factory, QeviePaymaster (Mode A + B), BatchPayments, 
-    PaymentRequest, SubscriptionManager, UsernameRegistry — 44 tests all passing
-  - SDK: @qevie/sdk core + React hooks — builds ESM+CJS, typechecks clean
+    PaymentRequest, SubscriptionManager, UsernameRegistry, ReceiptRegistry — targeted receipt tests passing
+  - SDK: @qevie/sdk core + React hooks + receipt/passport methods — builds ESM+CJS, typechecks clean, vitest receipt suite passing
   - App: React PWA with all pages (Onboarding, Home, Send, Request, Scan, Batch, 
-    Subscriptions, Dashboard, Profile, PayLink) — typechecks clean
-  - paymaster-service: allowlist token API + subscription keeper — typechecks clean
+    Subscriptions, Dashboard, Profile, PayLink, History, Passport, Receipt Detail, Developers) — typechecks clean
+  - paymaster-service: allowlist token API + subscription keeper + receipt issuance endpoint — typechecks clean
   - infra: Voltaire bundler docker-compose (unsafe mode)
 - Next action: 
   1. Deploy Phase 2-3 contracts on testnet with funded deployer
   2. Fund paymaster EntryPoint deposit
   3. Run Voltaire bundler + end-to-end gasless UserOp test
-  4. Phase 6: Redeploy audited contracts to mainnet 1990
-  5. Phase 7: Ship — fund mainnet paymaster, set trusted signer, launch app
+  4. Deploy and verify ReceiptRegistry, authorize issuer, and set `VITE_RECEIPT_REGISTRY_ADDRESS`
+  5. Phase 6: Redeploy audited contracts to mainnet 1990
+  6. Phase 7: Ship — fund mainnet paymaster, set trusted signer, launch app

@@ -8,6 +8,7 @@ export interface QevieContracts {
   paymentRequest: Address;
   subscriptionManager: Address;
   usernameRegistry: Address;
+  receiptRegistry?: Address;
   qusdc: Address;
   wqie: Address;
   dexPair: Address;

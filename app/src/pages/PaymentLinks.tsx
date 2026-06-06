@@ -1,14 +1,19 @@
 import React, { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { buildPaymentUri } from "@qevie/sdk";
+import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import { APP_CONFIG } from "../config.js";
+import { makeHistoryId, saveCreatedLinks } from "../lib/history.js";
 
 type Mode = "single" | "split";
 
 interface LinkMeta {
+  id: string;
   uri: string;
   shareUrl: string;
+  to: string;
+  targetAddress: string | null;
   amount?: bigint;
   maxUses?: number;
   expiry?: string;
@@ -16,32 +21,8 @@ interface LinkMeta {
   copied: boolean;
 }
 
-function buildUri(params: {
-  to: string;
-  amount?: string;
-  memo?: string;
-  maxUses?: string;
-  expiry?: string;
-}): string {
-  const amountBig = params.amount ? BigInt(Math.round(parseFloat(params.amount) * 1e6)) : undefined;
-  const expiryDelta = params.expiry
-    ? Math.max(0, Math.floor((new Date(params.expiry).getTime() - Date.now()) / 1000))
-    : undefined;
-
-  const base = buildPaymentUri({ to: params.to, amount: amountBig, memo: params.memo || undefined, expirySeconds: expiryDelta });
-
-  const extra = new URLSearchParams();
-  if (params.maxUses && parseInt(params.maxUses) > 0) extra.set("maxUses", params.maxUses);
-  if (params.expiry) extra.set("expires", params.expiry);
-
-  const qs = extra.toString();
-  const uri = qs ? `${base}${base.includes("?") ? "&" : "?"}${qs}` : base;
-
-  const shareUrl = `${APP_CONFIG.appBaseUrl}/pay?pay=${encodeURIComponent(uri)}`;
-  return shareUrl;
-}
-
 export default function PaymentLinks(): React.ReactElement {
+  const client = useQevieClient();
   const { address } = useWallet();
 
   const [mode, setMode] = useState<Mode>("single");
@@ -58,6 +39,8 @@ export default function PaymentLinks(): React.ReactElement {
   // Results
   const [links, setLinks] = useState<LinkMeta[] | null>(null);
   const [showQR, setShowQR] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const minExpiry = new Date(Date.now() + 60_000).toISOString().slice(0, 16);
 
@@ -71,52 +54,84 @@ export default function PaymentLinks(): React.ReactElement {
 
   const splitTotal = parsedSplit.reduce((sum, n) => sum + n, 0);
 
-  const generate = (): void => {
+  const generate = async (): Promise<void> => {
     const to = recipient.trim() || (address ?? "");
-    if (!to) return;
+    if (!to) {
+      setError("Choose a recipient or connect your wallet.");
+      return;
+    }
 
-    // In split mode, generate one request per amount; otherwise a single link.
     const amounts: (number | undefined)[] =
       mode === "split" ? parsedSplit : [amount ? parseFloat(amount) : undefined];
-    if (amounts.length === 0) return;
+    if (amounts.length === 0) {
+      setError("Add at least one amount before generating links.");
+      return;
+    }
 
-    const count = amounts.length;
-    const newLinks: LinkMeta[] = amounts.map((amt, i) => {
-      const amountBig = amt !== undefined ? BigInt(Math.round(amt * 1e6)) : undefined;
-      const label = mode === "split" ? `Request ${i + 1} of ${count}` : "Payment link";
-      const memo_ = mode === "split" && count > 1
-        ? `${memo.trim() ? memo.trim() + " " : ""}(${i + 1}/${count})`
-        : memo.trim() || undefined;
+    setLoading(true);
+    setError(null);
 
-      const base = buildPaymentUri({
-        to,
-        amount: amountBig,
-        memo: memo_,
-        expirySeconds: expiry
-          ? Math.max(0, Math.floor((new Date(expiry).getTime() - Date.now()) / 1000))
-          : undefined,
+    try {
+      const count = amounts.length;
+      const resolvedTarget = to.startsWith("0x") ? to : await client.resolve(to);
+      const newLinks: LinkMeta[] = amounts.map((amt, i) => {
+        const id = makeHistoryId("link");
+        const amountBig = amt !== undefined ? BigInt(Math.round(amt * 1e6)) : undefined;
+        const label = mode === "split" ? `Request ${i + 1} of ${count}` : "Payment link";
+        const memo_ = mode === "split" && count > 1
+          ? `${memo.trim() ? memo.trim() + " " : ""}(${i + 1}/${count})`
+          : memo.trim() || undefined;
+
+        const base = buildPaymentUri({
+          to,
+          amount: amountBig,
+          memo: memo_,
+          expirySeconds: expiry
+            ? Math.max(0, Math.floor((new Date(expiry).getTime() - Date.now()) / 1000))
+            : undefined,
+        });
+
+        const extra = new URLSearchParams();
+        extra.set("id", id);
+        if (maxUses && parseInt(maxUses) > 0) extra.set("maxUses", maxUses);
+        if (expiry) extra.set("expires", expiry);
+        const qs = extra.toString();
+        const uri = qs ? `${base}${base.includes("?") ? "&" : "?"}${qs}` : base;
+        const shareUrl = `${APP_CONFIG.appBaseUrl}/pay?pay=${encodeURIComponent(uri)}`;
+
+        return {
+          id,
+          uri,
+          shareUrl,
+          to,
+          targetAddress: resolvedTarget,
+          amount: amountBig,
+          maxUses: maxUses && parseInt(maxUses) > 0 ? parseInt(maxUses) : undefined,
+          expiry: expiry || undefined,
+          label,
+          copied: false,
+        };
       });
 
-      const extra = new URLSearchParams();
-      if (maxUses && parseInt(maxUses) > 0) extra.set("maxUses", maxUses);
-      if (expiry) extra.set("expires", expiry);
-      const qs = extra.toString();
-      const uri = qs ? `${base}${base.includes("?") ? "&" : "?"}${qs}` : base;
-      const shareUrl = `${APP_CONFIG.appBaseUrl}/pay?pay=${encodeURIComponent(uri)}`;
+      saveCreatedLinks(newLinks.map((link) => ({
+        id: link.id,
+        label: link.label,
+        uri: link.uri,
+        shareUrl: link.shareUrl,
+        to: link.to,
+        targetAddress: link.targetAddress,
+        amount: link.amount ?? null,
+        expiry: link.expiry ?? null,
+        maxUses: link.maxUses ?? null,
+      })));
 
-      return {
-        uri,
-        shareUrl,
-        amount: amountBig,
-        maxUses: maxUses && parseInt(maxUses) > 0 ? parseInt(maxUses) : undefined,
-        expiry: expiry || undefined,
-        label,
-        copied: false,
-      };
-    });
-
-    setLinks(newLinks);
-    setShowQR(null);
+      setLinks(newLinks);
+      setShowQR(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to generate links");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const copyLink = (idx: number): void => {
@@ -239,6 +254,8 @@ export default function PaymentLinks(): React.ReactElement {
         </p>
       </div>
 
+      {error !== null && <div className="alert alert-error" style={{ marginBottom: "1rem" }}>{error}</div>}
+
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         {/* Recipient */}
         <div className="input-group">
@@ -338,11 +355,11 @@ export default function PaymentLinks(): React.ReactElement {
 
         <button
           className="btn-primary btn-lg"
-          onClick={generate}
-          disabled={(!recipient.trim() && !address) || (mode === "split" && parsedSplit.length === 0)}
+          onClick={() => { void generate(); }}
+          disabled={loading || (!recipient.trim() && !address) || (mode === "split" && parsedSplit.length === 0)}
           style={{ marginTop: "0.5rem" }}
         >
-          {mode === "split"
+          {loading ? "Generating…" : mode === "split"
             ? `Generate ${parsedSplit.length || 0} ${parsedSplit.length === 1 ? "link" : "links"}`
             : "Generate link"}
         </button>

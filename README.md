@@ -213,6 +213,44 @@ VPS source and deploy paths:
 - source repo: `/opt/qevie`
 - built frontend: `/var/www/qevie`
 
+## Qevie Passport
+
+Qevie Passport turns gasless QUSDC payments into portable payment reputation.
+
+Every successful Qevie payment can create a verifiable receipt through the `ReceiptRegistry`. The Passport page aggregates those receipts into a user or merchant profile showing verified payment activity.
+
+Qevie Passport is not a credit score. It is a proof-of-payment profile that can show:
+
+- verified receipts
+- payments sent and received
+- merchant payments received
+- completed subscriptions
+- batch payouts
+- QUSDC volume, if the user chooses to show it
+- downloadable receipt JSON
+
+This gives QIE users and merchants reusable payment reputation across apps.
+
+## Developer SDK
+
+Qevie exposes a TypeScript SDK for QIE builders who want to add gasless QUSDC payments, receipts, and Passport stats.
+
+Example:
+
+```ts
+import { createQevieClient } from "@qevie/sdk";
+
+const qevie = createQevieClient({ chainId: 1990, rpcUrl, bundlerUrl, paymasterServiceUrl, contracts });
+
+await qevie.pay(signer, {
+  to: "0xRecipient",
+  amount: BigInt(10_000_000),
+  memo: "Thanks",
+});
+
+const passport = await qevie.getPassport("0xMerchant");
+```
+
 PM2 process names:
 
 - `qevie-app`

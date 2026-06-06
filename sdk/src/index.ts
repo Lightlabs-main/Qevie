@@ -19,6 +19,7 @@ export { buildPaymentUri, parsePaymentUri, buildShareUrl } from "./links.js";
 
 // Name resolution
 export { resolveRecipient } from "./resolve.js";
+export { stableStringify, hashReceiptMetadata } from "./receipts.js";
 
 // Types
 export type {
@@ -29,6 +30,11 @@ export type {
   BatchPayParams,
   RequestParams,
   RequestRecord,
+  ReceiptType,
+  CreateReceiptInput,
+  CreateReceiptResult,
+  QevieReceipt,
+  PassportStats,
   SubscribeParams,
   SubscriptionRecord,
   UserOpResult,
@@ -48,6 +54,7 @@ export {
   BATCH_PAYMENTS_ABI,
   PAYMENT_REQUEST_ABI,
   SUBSCRIPTION_MANAGER_ABI,
+  RECEIPT_REGISTRY_ABI,
   USERNAME_REGISTRY_ABI,
   PAYMASTER_ABI,
   QIE_DOMAINS_ABI,

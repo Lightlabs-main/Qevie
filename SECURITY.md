@@ -28,3 +28,20 @@ This phase does not deploy a paymaster and does not custody user funds beyond wh
 - Slither or equivalent static analysis.
 - Mainnet deployments verified on `https://mainnet.qie.digital/`.
 - No sponsored free tier without hard caps and Sybil gating.
+
+## Receipt and Passport Security
+
+The ReceiptRegistry does not custody funds and cannot move user tokens. It only records verified payment receipts.
+
+Receipt creation is restricted to authorized Qevie issuers/contracts to reduce spam and reputation manipulation.
+
+Qevie Passport is a reputation and receipt aggregation layer, not a credit score or financial guarantee.
+
+Privacy limitations:
+
+- On-chain data is public.
+- UI-level hidden amounts do not erase underlying chain data if emitted.
+- Users should avoid putting sensitive memos directly on-chain.
+- Metadata should be hashed, and private details should remain off-chain.
+
+Qevie Passport is not a zero-knowledge privacy system. Receipt hashes and on-chain receipt events are public. Users can choose to hide amounts and memos from the Qevie UI/export layer, but any data emitted on-chain may be publicly observable. Future versions may support encrypted metadata or ZK/private receipts.

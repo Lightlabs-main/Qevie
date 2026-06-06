@@ -5,6 +5,7 @@ import { QUSDC_ABI } from "@qevie/sdk";
 import { useWallet } from "../hooks/useWallet.js";
 import { APP_CONFIG } from "../config.js";
 import Logo from "../components/Logo.js";
+import { formatQusdc, getGlobalFeed, type FeedItem } from "../lib/history.js";
 
 export default function Home(): React.ReactElement {
   const client = useQevieClient();
@@ -12,6 +13,7 @@ export default function Home(): React.ReactElement {
 
   const [balance, setBalance] = useState<bigint | null>(null);
   const [loading, setLoading] = useState(true);
+  const [feed, setFeed] = useState<FeedItem[]>([]);
 
   useEffect(() => {
     if (address === null) return;
@@ -33,13 +35,28 @@ export default function Home(): React.ReactElement {
     return () => { mounted = false; };
   }, [address, client]);
 
+  useEffect(() => {
+    let mounted = true;
+    void (async () => {
+      try {
+        const nextFeed = await getGlobalFeed(client);
+        if (mounted) setFeed(nextFeed);
+      } catch {
+        if (mounted) setFeed([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [client]);
+
   const usd = balance !== null ? (Number(balance) / 1e6).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00";
 
   const actions = [
     { to: "/send", label: "Send", icon: "↑", color: "var(--accent)" },
     { to: "/dashboard", label: "Wallet", icon: "👛", color: "#f59e0b" },
     { to: "/links", label: "Links", icon: "🔗", color: "#38bdf8" },
-    { to: "/subscriptions", label: "Stats", icon: "🔄", color: "#818cf8" },
+    { to: "/history", label: "History", icon: "🕘", color: "#818cf8" },
+    { to: "/passport", label: "Passport", icon: "🪪", color: "#22c55e" },
+    { to: "/developers", label: "Developers", icon: "⌘", color: "#fb7185" },
   ];
 
   return (
@@ -113,6 +130,40 @@ export default function Home(): React.ReactElement {
             </div>
             <span style={{ fontSize: "0.625rem", fontWeight: 800, opacity: 0.3 }}>SEC-8021</span>
           </div>
+        </div>
+      </section>
+
+      <section style={{ marginTop: "var(--s-4)" }}>
+        <div className="section-label">Live Activity</div>
+        <div className="surface-card" style={{ overflow: "hidden", padding: "var(--s-2)" }}>
+          {feed.length === 0 ? (
+            <div className="text-muted" style={{ fontSize: "0.8125rem", textAlign: "center", padding: "var(--s-2)" }}>
+              No on-chain app activity yet.
+            </div>
+          ) : (
+            <div className="history-ticker">
+              <div className="history-ticker-track">
+                {[...feed, ...feed].map((item, index) => (
+                  <Link
+                    key={`${item.id}_${index}`}
+                    to="/history"
+                    className="history-ticker-card"
+                    style={{ textDecoration: "none" }}
+                  >
+                    <div style={{ fontWeight: 700, color: "var(--text-pure)", fontSize: "0.8125rem" }}>
+                      {item.title}
+                    </div>
+                    <div className="text-muted" style={{ fontSize: "0.6875rem" }}>
+                      {item.subtitle}
+                    </div>
+                    <div style={{ marginTop: "0.35rem", color: "var(--accent-light)", fontWeight: 700 }}>
+                      {formatQusdc(item.amount)}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
     </>

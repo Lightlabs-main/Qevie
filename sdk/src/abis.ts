@@ -231,6 +231,88 @@ export const PAYMENT_REQUEST_ABI = [
   },
 ] as const;
 
+export const RECEIPT_REGISTRY_ABI = [
+  {
+    type: "function",
+    name: "createReceipt",
+    inputs: [
+      { name: "payer", type: "address" },
+      { name: "payee", type: "address" },
+      { name: "token", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "amountPrivate", type: "bool" },
+      { name: "metadataHash", type: "bytes32" },
+      { name: "paymentReference", type: "bytes32" },
+      { name: "receiptType", type: "uint8" },
+    ],
+    outputs: [{ name: "receiptId", type: "bytes32" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "getReceipt",
+    inputs: [{ name: "receiptId", type: "bytes32" }],
+    outputs: [
+      {
+        type: "tuple",
+        name: "receipt",
+        components: [
+          { name: "receiptId", type: "bytes32" },
+          { name: "payer", type: "address" },
+          { name: "payee", type: "address" },
+          { name: "token", type: "address" },
+          { name: "amount", type: "uint256" },
+          { name: "amountPrivate", type: "bool" },
+          { name: "metadataHash", type: "bytes32" },
+          { name: "paymentReference", type: "bytes32" },
+          { name: "receiptType", type: "uint8" },
+          { name: "timestamp", type: "uint64" },
+          { name: "issuer", type: "address" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getReceiptsByPayer",
+    inputs: [{ name: "payer", type: "address" }],
+    outputs: [{ type: "bytes32[]" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getReceiptsByPayee",
+    inputs: [{ name: "payee", type: "address" }],
+    outputs: [{ type: "bytes32[]" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "authorizedIssuers",
+    inputs: [{ name: "issuer", type: "address" }],
+    outputs: [{ type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "event",
+    name: "ReceiptCreated",
+    inputs: [
+      { name: "receiptId", type: "bytes32", indexed: true },
+      { name: "payer", type: "address", indexed: true },
+      { name: "payee", type: "address", indexed: true },
+      { name: "token", type: "address", indexed: false },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "amountPrivate", type: "bool", indexed: false },
+      { name: "metadataHash", type: "bytes32", indexed: false },
+      { name: "paymentReference", type: "bytes32", indexed: false },
+      { name: "receiptType", type: "uint8", indexed: false },
+      { name: "issuer", type: "address", indexed: false },
+      { name: "timestamp", type: "uint64", indexed: false },
+    ],
+  },
+] as const;
+
 export const SUBSCRIPTION_MANAGER_ABI = [
   {
     type: "function",

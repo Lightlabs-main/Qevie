@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import type { UserOpResult } from "@qevie/sdk";
+import type { CreateReceiptResult } from "@qevie/sdk";
 import { APP_CONFIG } from "../config.js";
 import { gaslessParams } from "../lib/gasless.js";
 
@@ -23,6 +24,8 @@ export default function Send(): React.ReactElement {
   const [step, setStep] = useState<Step>("form");
   const [result, setResult] = useState<UserOpResult | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [receipt, setReceipt] = useState<CreateReceiptResult | null>(null);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resolvedAddr, setResolvedAddr] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
@@ -65,11 +68,38 @@ export default function Send(): React.ReactElement {
       // Reconcile the on-chain receipt in the background.
       client.bundler
         .waitForUserOp(userOpHash)
-        .then((res) => {
+        .then(async (res) => {
           if (res.status === "failed") {
             setError("Payment was submitted but failed on-chain.");
           } else {
             setResult(res);
+            if (APP_CONFIG.contracts.receiptRegistry !== undefined && res.txHash !== null) {
+              try {
+                const created = await client.createReceipt({
+                  payer: address,
+                  payee: resolvedAddr as `0x${string}` ?? to.trim() as `0x${string}`,
+                  token: APP_CONFIG.contracts.qusdc,
+                  amount,
+                  amountPrivate: false,
+                  receiptType: "SINGLE_PAYMENT",
+                  paymentReference: res.txHash,
+                  metadata: {
+                    memo: memo.trim() || null,
+                    source: "send-flow",
+                    txHash: res.txHash,
+                    userOpHash,
+                  },
+                });
+                setReceipt(created);
+                setReceiptError(null);
+              } catch (receiptFailure) {
+                setReceiptError(
+                  receiptFailure instanceof Error
+                    ? receiptFailure.message
+                    : "Payment succeeded, but receipt creation failed.",
+                );
+              }
+            }
           }
         })
         .catch(() => { /* keep the optimistic "submitted" state */ })
@@ -112,10 +142,26 @@ export default function Send(): React.ReactElement {
             </a>
           )}
 
+          {receipt !== null && (
+            <a
+              href={`/receipt/${receipt.receiptId}`}
+              className="chip chip-success"
+              style={{ display: "inline-flex", marginTop: "0.75rem", textDecoration: "none" }}
+            >
+              View receipt →
+            </a>
+          )}
+          {receiptError !== null && (
+            <p className="text-muted" style={{ marginTop: "0.75rem", fontSize: "0.8125rem" }}>
+              {receiptError}
+            </p>
+          )}
+
           <button
             className="btn-secondary btn-lg"
             onClick={() => {
               setStep("form"); setResult(null); setConfirming(false); setError(null);
+              setReceipt(null); setReceiptError(null);
               setTo(""); setAmount(""); setMemo("");
             }}
             style={{ marginTop: "2rem" }}

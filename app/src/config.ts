@@ -17,6 +17,11 @@ const paymasterServiceUrl =
 const appBaseUrl = import.meta.env["VITE_APP_BASE_URL"] ?? "https://app.qevie.io";
 
 const contractAddresses = isTestnet ? TESTNET_CONTRACTS : MAINNET_CONTRACTS;
+const receiptRegistry = import.meta.env["VITE_RECEIPT_REGISTRY_ADDRESS"];
+
+if (receiptRegistry !== undefined && receiptRegistry !== "") {
+  contractAddresses.receiptRegistry = receiptRegistry as `0x${string}`;
+}
 
 if (!isTestnet) {
   const missing = (Object.keys(contractAddresses) as (keyof QevieContracts)[]).filter(

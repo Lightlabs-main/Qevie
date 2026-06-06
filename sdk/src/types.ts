@@ -85,6 +85,60 @@ export interface RequestRecord {
   status: "pending" | "paid" | "cancelled";
 }
 
+export type ReceiptType =
+  | "SINGLE_PAYMENT"
+  | "BATCH_PAYMENT"
+  | "PAYMENT_REQUEST_SETTLED"
+  | "SUBSCRIPTION_PAYMENT"
+  | "MERCHANT_CHECKOUT"
+  | "MANUAL_RECEIPT";
+
+export interface CreateReceiptInput {
+  payer: Address;
+  payee: Address;
+  token: Address;
+  amount: string;
+  amountPrivate: boolean;
+  metadata: Record<string, unknown>;
+  receiptType: ReceiptType;
+  paymentReference?: Hex;
+}
+
+export interface QevieReceipt {
+  receiptId: Hex;
+  payer: Address;
+  payee: Address;
+  token: Address;
+  tokenSymbol: "QUSDC";
+  amount: string | null;
+  amountPrivate: boolean;
+  metadataHash: Hex;
+  paymentReference?: Hex;
+  receiptType: ReceiptType;
+  timestamp: number;
+  issuer: Address;
+}
+
+export interface CreateReceiptResult {
+  receiptId: Hex;
+  metadataHash: Hex;
+  txHash: Hash | null;
+}
+
+export interface PassportStats {
+  account: Address;
+  totalReceipts: number;
+  paymentsSent: number;
+  paymentsReceived: number;
+  subscriptionsCompleted: number;
+  batchPayoutsSent: number;
+  merchantReceiptsReceived: number;
+  qusdcVolumeSent?: string;
+  qusdcVolumeReceived?: string;
+  volumePrivate: boolean;
+  latestReceipts: QevieReceipt[];
+}
+
 // ---------------------------------------------------------------------------
 // Subscription types
 // ---------------------------------------------------------------------------

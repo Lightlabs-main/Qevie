@@ -12,6 +12,7 @@ import {
 import {
   BATCH_PAYMENTS_ABI,
   PAYMENT_REQUEST_ABI,
+  RECEIPT_REGISTRY_ABI,
   SUBSCRIPTION_MANAGER_ABI,
   USERNAME_REGISTRY_ABI,
 } from "./abis.js";
@@ -19,6 +20,7 @@ import { QevieAccount } from "./account.js";
 import { BundlerClient } from "./bundler.js";
 import { resolveRecipient } from "./resolve.js";
 import { buildPaymentUri, parsePaymentUri, buildShareUrl } from "./links.js";
+import { hashReceiptMetadata } from "./receipts.js";
 import type { QevieContracts } from "./contracts.js";
 import type {
   QevieClientConfig,
@@ -28,6 +30,11 @@ import type {
   PayParams,
   BatchPayParams,
   RequestParams,
+  CreateReceiptInput,
+  CreateReceiptResult,
+  PassportStats,
+  QevieReceipt,
+  ReceiptType,
   SubscribeParams,
   SubscriptionRecord,
   UserOpResult,
@@ -337,6 +344,130 @@ export class QevieClient {
   }
 
   // ---------------------------------------------------------------------------
+  // Receipts / Passport
+  // ---------------------------------------------------------------------------
+
+  async createReceipt(input: CreateReceiptInput): Promise<CreateReceiptResult> {
+    this._requireReceiptRegistry();
+    const metadataHash = hashReceiptMetadata(input.metadata);
+    const res = await fetch(`${this.config.paymasterServiceUrl}/receipts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...input,
+        metadataHash,
+      }),
+    });
+    if (!res.ok) {
+      const body = await safeJson(res);
+      throw new Error(
+        typeof body?.error === "string" ? body.error : `Receipt creation failed (${res.status})`,
+      );
+    }
+    return await res.json() as CreateReceiptResult;
+  }
+
+  async getReceipt(receiptId: Hex): Promise<QevieReceipt> {
+    const registry = this._requireReceiptRegistry();
+    const result = await this.publicClient.readContract({
+      address: registry,
+      abi: RECEIPT_REGISTRY_ABI,
+      functionName: "getReceipt",
+      args: [receiptId],
+    }) as {
+      receiptId: Hex;
+      payer: Address;
+      payee: Address;
+      token: Address;
+      amount: bigint;
+      amountPrivate: boolean;
+      metadataHash: Hex;
+      paymentReference: Hex;
+      receiptType: number;
+      timestamp: bigint;
+      issuer: Address;
+    };
+    return this._mapReceipt(result);
+  }
+
+  async listByPayer(account: Address): Promise<QevieReceipt[]> {
+    const registry = this._requireReceiptRegistry();
+    const ids = await this.publicClient.readContract({
+      address: registry,
+      abi: RECEIPT_REGISTRY_ABI,
+      functionName: "getReceiptsByPayer",
+      args: [account],
+    }) as Hex[];
+    return this._getReceiptsByIds(ids);
+  }
+
+  async listByPayee(account: Address): Promise<QevieReceipt[]> {
+    const registry = this._requireReceiptRegistry();
+    const ids = await this.publicClient.readContract({
+      address: registry,
+      abi: RECEIPT_REGISTRY_ABI,
+      functionName: "getReceiptsByPayee",
+      args: [account],
+    }) as Hex[];
+    return this._getReceiptsByIds(ids);
+  }
+
+  async listForAccount(account: Address): Promise<QevieReceipt[]> {
+    const [payerReceipts, payeeReceipts] = await Promise.all([
+      this.listByPayer(account),
+      this.listByPayee(account),
+    ]);
+    const seen = new Set<Hex>();
+    return [...payerReceipts, ...payeeReceipts]
+      .filter((receipt) => {
+        if (seen.has(receipt.receiptId)) return false;
+        seen.add(receipt.receiptId);
+        return true;
+      })
+      .sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  async exportReceipt(receiptId: Hex): Promise<string> {
+    const receipt = await this.getReceipt(receiptId);
+    const registry = this._requireReceiptRegistry();
+    return JSON.stringify({
+      app: "Qevie",
+      network: this.config.chainId === 1990 ? "QIE Mainnet" : "QIE Testnet",
+      chainId: this.config.chainId,
+      receiptId: receipt.receiptId,
+      receiptType: receipt.receiptType,
+      payer: receipt.payer,
+      payee: receipt.payee,
+      token: receipt.token,
+      tokenSymbol: receipt.tokenSymbol,
+      amount: receipt.amountPrivate ? null : receipt.amount,
+      amountPrivate: receipt.amountPrivate,
+      metadataHash: receipt.metadataHash,
+      txHash: receipt.paymentReference ?? null,
+      timestamp: new Date(receipt.timestamp * 1000).toISOString(),
+      verification: {
+        source: "ReceiptRegistry",
+        status: "verified",
+        registry,
+      },
+    }, null, 2);
+  }
+
+  async getPassport(account: Address): Promise<PassportStats> {
+    const receipts = await this.listForAccount(account);
+    return this._aggregatePassport(account, receipts);
+  }
+
+  async getStats(account: Address): Promise<PassportStats> {
+    return this.getPassport(account);
+  }
+
+  async getRecentReceipts(account: Address, limit = 10): Promise<QevieReceipt[]> {
+    const receipts = await this.listForAccount(account);
+    return receipts.slice(0, limit);
+  }
+
+  // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
 
@@ -416,5 +547,119 @@ export class QevieClient {
     const padded = new Uint8Array(32);
     padded.set(encoded);
     return `0x${Buffer.from(padded).toString("hex")}` as Hex;
+  }
+
+  private _requireReceiptRegistry(): Address {
+    const receiptRegistry = this.config.contracts.receiptRegistry;
+    if (receiptRegistry === undefined) {
+      throw new Error("ReceiptRegistry is not configured for this network");
+    }
+    return receiptRegistry;
+  }
+
+  private async _getReceiptsByIds(ids: Hex[]): Promise<QevieReceipt[]> {
+    const receipts = await Promise.all(ids.map((id) => this.getReceipt(id)));
+    return receipts.sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  private _mapReceipt(receipt: {
+    receiptId: Hex;
+    payer: Address;
+    payee: Address;
+    token: Address;
+    amount: bigint;
+    amountPrivate: boolean;
+    metadataHash: Hex;
+    paymentReference: Hex;
+    receiptType: number;
+    timestamp: bigint;
+    issuer: Address;
+  }): QevieReceipt {
+    const type = receiptTypeFromIndex(receipt.receiptType);
+    return {
+      receiptId: receipt.receiptId,
+      payer: receipt.payer,
+      payee: receipt.payee,
+      token: receipt.token,
+      tokenSymbol: "QUSDC",
+      amount: receipt.amountPrivate ? null : formatTokenAmount(receipt.amount),
+      amountPrivate: receipt.amountPrivate,
+      metadataHash: receipt.metadataHash,
+      receiptType: type,
+      timestamp: Number(receipt.timestamp),
+      issuer: receipt.issuer,
+      ...(receipt.paymentReference === zeroHash ? {} : { paymentReference: receipt.paymentReference }),
+    };
+  }
+
+  private _aggregatePassport(account: Address, receipts: QevieReceipt[]): PassportStats {
+    let paymentsSent = 0;
+    let paymentsReceived = 0;
+    let subscriptionsCompleted = 0;
+    let batchPayoutsSent = 0;
+    let merchantReceiptsReceived = 0;
+    let volumeSent = 0;
+    let volumeReceived = 0;
+    let volumePrivate = false;
+
+    for (const receipt of receipts) {
+      const isPayer = receipt.payer.toLowerCase() === account.toLowerCase();
+      const isPayee = receipt.payee.toLowerCase() === account.toLowerCase();
+      if (isPayer) paymentsSent += 1;
+      if (isPayee) paymentsReceived += 1;
+      if (isPayee && receipt.receiptType === "MERCHANT_CHECKOUT") merchantReceiptsReceived += 1;
+      if (isPayer && receipt.receiptType === "BATCH_PAYMENT") batchPayoutsSent += 1;
+      if (receipt.receiptType === "SUBSCRIPTION_PAYMENT") subscriptionsCompleted += 1;
+
+      if (receipt.amount === null) {
+        volumePrivate = true;
+      } else {
+        const amount = Number(receipt.amount);
+        if (isPayer) volumeSent += amount;
+        if (isPayee) volumeReceived += amount;
+      }
+    }
+
+    return {
+      account,
+      totalReceipts: receipts.length,
+      paymentsSent,
+      paymentsReceived,
+      subscriptionsCompleted,
+      batchPayoutsSent,
+      merchantReceiptsReceived,
+      volumePrivate,
+      latestReceipts: receipts.slice(0, 10),
+      ...(volumePrivate ? {} : {
+        qusdcVolumeSent: volumeSent.toFixed(2),
+        qusdcVolumeReceived: volumeReceived.toFixed(2),
+      }),
+    };
+  }
+}
+
+const zeroHash = `0x${"0".repeat(64)}` as Hex;
+
+function formatTokenAmount(amount: bigint): string {
+  return (Number(amount) / 1e6).toFixed(2);
+}
+
+function receiptTypeFromIndex(index: number): ReceiptType {
+  const types: ReceiptType[] = [
+    "SINGLE_PAYMENT",
+    "BATCH_PAYMENT",
+    "PAYMENT_REQUEST_SETTLED",
+    "SUBSCRIPTION_PAYMENT",
+    "MERCHANT_CHECKOUT",
+    "MANUAL_RECEIPT",
+  ];
+  return types[index] ?? "MANUAL_RECEIPT";
+}
+
+async function safeJson(res: Response): Promise<{ error?: string } | null> {
+  try {
+    return await res.json() as { error?: string };
+  } catch {
+    return null;
   }
 }

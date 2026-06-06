@@ -12,6 +12,7 @@ import { type IncomingMessage, type ServerResponse, createServer } from "node:ht
 import { issueAllowlistToken } from "./allowlist.js";
 import { startKeeper } from "./keeper.js";
 import { PORT } from "./config.js";
+import { issueReceipt } from "./receipts.js";
 
 async function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -57,6 +58,50 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
     } catch (e) {
       console.error("[api] /allowlist-token error:", e);
       json(res, 500, { error: "Internal error" });
+    }
+    return;
+  }
+
+  if (req.url === "/receipts" && req.method === "POST") {
+    try {
+      const raw = await readBody(req);
+      const body = JSON.parse(raw) as {
+        payer?: string;
+        payee?: string;
+        token?: string;
+        amount?: string;
+        amountPrivate?: boolean;
+        metadataHash?: `0x${string}`;
+        receiptType?: string;
+        paymentReference?: `0x${string}`;
+      };
+      if (
+        typeof body.payer !== "string" ||
+        typeof body.payee !== "string" ||
+        typeof body.token !== "string" ||
+        typeof body.amount !== "string" ||
+        typeof body.amountPrivate !== "boolean" ||
+        typeof body.metadataHash !== "string" ||
+        typeof body.receiptType !== "string"
+      ) {
+        json(res, 400, { error: "invalid receipt request" });
+        return;
+      }
+
+      const receipt = await issueReceipt({
+        payer: body.payer as `0x${string}`,
+        payee: body.payee as `0x${string}`,
+        token: body.token as `0x${string}`,
+        amount: body.amount,
+        amountPrivate: body.amountPrivate,
+        metadataHash: body.metadataHash,
+        receiptType: body.receiptType as never,
+        paymentReference: body.paymentReference,
+      });
+      json(res, 200, receipt);
+    } catch (e) {
+      console.error("[api] /receipts error:", e);
+      json(res, 500, { error: e instanceof Error ? e.message : "Internal error" });
     }
     return;
   }
