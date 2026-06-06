@@ -37,6 +37,7 @@ export default function Dashboard(): React.ReactElement {
   const [minting, setMinting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const isTestnet = APP_CONFIG.chainId === 1983;
   const explorerBase = APP_CONFIG.chainId === 1990
@@ -49,6 +50,13 @@ export default function Dashboard(): React.ReactElement {
     value === null ? "…" : `${(Number(value) / 1e18).toFixed(4)} QIE`;
   const formatQusdc = (value: bigint | null): string =>
     value === null ? "…" : `${(Number(value) / 1e6).toFixed(2)} QUSDC`;
+
+  const copyAddr = (): void => {
+    if (address === null) return;
+    void navigator.clipboard.writeText(address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  };
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
@@ -123,56 +131,57 @@ export default function Dashboard(): React.ReactElement {
   };
 
   return (
-    <main className="page">
-      <h2 style={{ marginBottom: "1.5rem" }}>Wallet</h2>
+    <main className="page fade-in">
+      <h2 style={{ marginBottom: "1.25rem" }}>Wallet</h2>
 
-      {/* How the two accounts relate */}
+      {/* Smart account — spendable balance */}
       <div className="card-gradient" style={{ marginBottom: "1rem" }}>
-        <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.75rem" }}>
-          Account setup
-        </p>
-        <div style={{ display: "grid", gap: "0.75rem" }}>
-          <div>
-            <p className="text-muted" style={{ fontSize: "0.75rem" }}>QIE Wallet signs</p>
-            <p className="mono" style={{ fontWeight: 700 }}>{short(signerAddress)}</p>
-          </div>
-          <div>
-            <p className="text-muted" style={{ fontSize: "0.75rem" }}>Qevie Smart Account pays and receives</p>
-            <p className="mono" style={{ fontWeight: 700 }}>{short(address)}</p>
+        <div className="flex-between" style={{ marginBottom: "0.6rem" }}>
+          <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            Smart Account
+          </span>
+          <span className="chip chip-accent">Gasless</span>
+        </div>
+        <p style={{ fontSize: "1.75rem", fontWeight: 800, lineHeight: 1.1 }}>{formatQusdc(smartQusdc)}</p>
+        <p className="text-muted" style={{ marginBottom: "0.85rem", fontSize: "0.85rem" }}>{formatQie(smartQie)}</p>
+        <div className="flex-between" style={{ gap: "0.5rem" }}>
+          <span className="mono" style={{ fontSize: "0.8rem" }}>{short(address)}</span>
+          <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
+            <button className="btn-secondary btn-sm" onClick={copyAddr}>{copied ? "✓ Copied" : "Copy"}</button>
+            {address !== null && (
+              <a
+                className="btn-secondary btn-sm"
+                href={`${explorerBase}/address/${address}`}
+                target="_blank" rel="noreferrer"
+                style={{ textDecoration: "none" }}
+              >
+                Explorer ↗
+              </a>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Smart account (spendable) */}
+      {/* Signer (owner EOA) */}
       <div className="card" style={{ marginBottom: "1rem" }}>
-        <p className="text-muted" style={{ marginBottom: "0.5rem", fontSize: "0.75rem" }}>Qevie Smart Account</p>
-        <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Gasless app account</p>
-        <p className="text-muted" style={{ marginBottom: "0.75rem" }}>
-          {formatQusdc(smartQusdc)} · {formatQie(smartQie)}
-        </p>
-        <p style={{ fontFamily: "monospace", wordBreak: "break-all", fontSize: "0.875rem" }}>
-          {address}
-        </p>
-        {address !== null && (
-          <a
-            href={`${explorerBase}/address/${address}`}
-            target="_blank" rel="noreferrer"
-            style={{ fontSize: "0.8rem", marginTop: "0.5rem", display: "inline-block" }}
-          >
-            View on QIE Explorer →
-          </a>
-        )}
+        <div className="flex-between">
+          <div>
+            <p className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>Signer · QIE Wallet</p>
+            <p className="mono" style={{ fontWeight: 600 }}>{short(signerAddress)}</p>
+          </div>
+          <p className="text-muted" style={{ fontSize: "0.78rem", textAlign: "right", lineHeight: 1.5 }}>
+            {formatQusdc(walletQusdc)}<br />{formatQie(walletQie)}
+          </p>
+        </div>
       </div>
 
       {/* Testnet faucet */}
       {isTestnet && (
         <div className="card" style={{ marginBottom: "1rem" }}>
-          <p className="text-muted" style={{ marginBottom: "0.5rem", fontSize: "0.75rem" }}>Testnet faucet</p>
-          <p style={{ fontSize: "0.85rem", marginBottom: "0.75rem" }}>
-            Mint mock QUSDC to your smart account so you can test sending. Sent from your
-            connected wallet (you'll confirm 1–2 transactions; a little QIE is also added so
-            the account can pay its own gas after the free sponsored ops run out).
-          </p>
+          <div className="flex-between" style={{ marginBottom: "0.75rem" }}>
+            <p className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>Testnet faucet</p>
+            <span className="text-muted" style={{ fontSize: "0.75rem" }}>100 QUSDC + gas</span>
+          </div>
           <button
             className="btn-primary"
             onClick={() => { void handleFaucet(); }}
@@ -181,40 +190,23 @@ export default function Dashboard(): React.ReactElement {
           >
             {minting
               ? <><span className="spinner" style={{ width: 16, height: 16 }} /> Minting…</>
-              : "Get 100 test QUSDC"}
+              : "Get test funds"}
           </button>
           {msg !== null && <p style={{ color: "var(--success, #16a34a)", fontSize: "0.8rem", marginTop: "0.75rem" }}>{msg}</p>}
           {error !== null && <p style={{ color: "var(--error)", fontSize: "0.8rem", marginTop: "0.75rem" }}>{error}</p>}
         </div>
       )}
 
-      {/* Owner / signer EOA */}
-      <div className="card" style={{ marginBottom: "1rem" }}>
-        <p className="text-muted" style={{ marginBottom: "0.5rem", fontSize: "0.75rem" }}>QIE Wallet</p>
-        <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Owner and signer</p>
-        <p className="text-muted" style={{ marginBottom: "0.75rem" }}>
-          {formatQusdc(walletQusdc)} · {formatQie(walletQie)}
-        </p>
-        <p style={{ fontFamily: "monospace", wordBreak: "break-all", fontSize: "0.875rem" }}>
-          {signerAddress}
-        </p>
-      </div>
-
-      {/* Gas model */}
-      <div className="card" style={{ marginBottom: "1rem" }}>
-        <p className="text-muted" style={{ marginBottom: "0.5rem", fontSize: "0.75rem" }}>Gas</p>
-        <p style={{ fontWeight: 600 }}>Sponsored by Qevie Paymaster</p>
-        <p className="text-muted" style={{ marginTop: "0.4rem" }}>
-          The first 3 actions are sponsored (gasless). After that, the smart account pays gas
-          from its own QIE — use the faucet above to top it up.
-        </p>
-      </div>
-
-      <div className="card" style={{ marginBottom: "1.5rem" }}>
-        <p className="text-muted" style={{ marginBottom: "0.5rem", fontSize: "0.75rem" }}>Network</p>
-        <p style={{ fontWeight: 600 }}>
-          {APP_CONFIG.chainId === 1990 ? "QIE Mainnet (1990)" : "QIE Testnet (1983)"}
-        </p>
+      {/* Network + gas */}
+      <div className="card" style={{ marginBottom: "1.5rem", display: "grid", gap: "0.6rem" }}>
+        <div className="flex-between">
+          <span className="text-muted" style={{ fontSize: "0.8rem" }}>Network</span>
+          <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>{APP_CONFIG.chainId === 1990 ? "QIE Mainnet" : "QIE Testnet"}</span>
+        </div>
+        <div className="flex-between">
+          <span className="text-muted" style={{ fontSize: "0.8rem" }}>Gas</span>
+          <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>Sponsored · 3 free</span>
+        </div>
       </div>
 
       <button

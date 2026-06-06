@@ -52,7 +52,8 @@ export default function PaymentLinks(): React.ReactElement {
   const [memo, setMemo] = useState("");
   const [maxUses, setMaxUses] = useState("");
   const [expiry, setExpiry] = useState("");
-  const [splitCount, setSplitCount] = useState("3");
+  // Split mode: one request per amount, entered comma- (or newline-) separated.
+  const [splitAmounts, setSplitAmounts] = useState("");
 
   // Results
   const [links, setLinks] = useState<LinkMeta[] | null>(null);
@@ -60,22 +61,36 @@ export default function PaymentLinks(): React.ReactElement {
 
   const minExpiry = new Date(Date.now() + 60_000).toISOString().slice(0, 16);
 
+  // Parse the comma/newline-separated split amounts into positive numbers.
+  const parsedSplit = splitAmounts
+    .split(/[,\n]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map((s) => parseFloat(s))
+    .filter((n) => Number.isFinite(n) && n > 0);
+
+  const splitTotal = parsedSplit.reduce((sum, n) => sum + n, 0);
+
   const generate = (): void => {
     const to = recipient.trim() || (address ?? "");
     if (!to) return;
 
-    const count = mode === "split" ? Math.max(1, Math.min(50, parseInt(splitCount) || 1)) : 1;
+    // In split mode, generate one request per amount; otherwise a single link.
+    const amounts: (number | undefined)[] =
+      mode === "split" ? parsedSplit : [amount ? parseFloat(amount) : undefined];
+    if (amounts.length === 0) return;
 
-    const newLinks: LinkMeta[] = [];
-    for (let i = 0; i < count; i++) {
-      const label = mode === "split" ? `Link ${i + 1} of ${count}` : "Payment link";
+    const count = amounts.length;
+    const newLinks: LinkMeta[] = amounts.map((amt, i) => {
+      const amountBig = amt !== undefined ? BigInt(Math.round(amt * 1e6)) : undefined;
+      const label = mode === "split" ? `Request ${i + 1} of ${count}` : "Payment link";
       const memo_ = mode === "split" && count > 1
         ? `${memo.trim() ? memo.trim() + " " : ""}(${i + 1}/${count})`
         : memo.trim() || undefined;
 
       const base = buildPaymentUri({
         to,
-        amount: amount ? BigInt(Math.round(parseFloat(amount) * 1e6)) : undefined,
+        amount: amountBig,
         memo: memo_,
         expirySeconds: expiry
           ? Math.max(0, Math.floor((new Date(expiry).getTime() - Date.now()) / 1000))
@@ -89,16 +104,16 @@ export default function PaymentLinks(): React.ReactElement {
       const uri = qs ? `${base}${base.includes("?") ? "&" : "?"}${qs}` : base;
       const shareUrl = `${APP_CONFIG.appBaseUrl}/pay?pay=${encodeURIComponent(uri)}`;
 
-      newLinks.push({
+      return {
         uri,
         shareUrl,
-        amount: amount ? BigInt(Math.round(parseFloat(amount) * 1e6)) : undefined,
+        amount: amountBig,
         maxUses: maxUses && parseInt(maxUses) > 0 ? parseInt(maxUses) : undefined,
         expiry: expiry || undefined,
         label,
         copied: false,
-      });
-    }
+      };
+    });
 
     setLinks(newLinks);
     setShowQR(null);
@@ -220,7 +235,7 @@ export default function PaymentLinks(): React.ReactElement {
         <p className="text-muted mt-2" style={{ fontSize: "0.8125rem" }}>
           {mode === "single"
             ? "Generate one shareable payment request link."
-            : "Generate multiple links at once — perfect for splitting bills or group payments."}
+            : "Request different amounts from different people — one link each, all at once."}
         </p>
       </div>
 
@@ -238,20 +253,22 @@ export default function PaymentLinks(): React.ReactElement {
           />
         </div>
 
-        {/* Amount */}
-        <div className="input-group">
-          <label className="input-label">Amount <span className="text-dim">(optional)</span></label>
-          <div style={{ position: "relative" }}>
-            <input
-              type="number" min="0.01" step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="Leave blank for open amount"
-              style={{ paddingRight: "5rem" }}
-            />
-            <span className="input-suffix">QUSDC</span>
+        {/* Amount — single mode only (split mode collects amounts below) */}
+        {mode === "single" && (
+          <div className="input-group">
+            <label className="input-label">Amount <span className="text-dim">(optional)</span></label>
+            <div style={{ position: "relative" }}>
+              <input
+                type="number" min="0.01" step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="Leave blank for open amount"
+                style={{ paddingRight: "5rem" }}
+              />
+              <span className="input-suffix">QUSDC</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Memo */}
         <div className="input-group">
@@ -294,19 +311,26 @@ export default function PaymentLinks(): React.ReactElement {
           />
         </div>
 
-        {/* Split count */}
+        {/* Split amounts */}
         {mode === "split" && (
           <div className="input-group">
-            <label className="input-label">Number of links</label>
-            <input
-              type="number" min="2" max="50" step="1"
-              value={splitCount}
-              onChange={(e) => setSplitCount(e.target.value)}
-              placeholder="3"
-            />
-            {amount && parseInt(splitCount) > 1 && (
+            <label className="input-label">
+              Amounts <span className="text-dim">(one per person, separated by commas)</span>
+            </label>
+            <div style={{ position: "relative" }}>
+              <input
+                value={splitAmounts}
+                onChange={(e) => setSplitAmounts(e.target.value)}
+                placeholder="e.g. 10, 25.50, 5"
+                inputMode="decimal"
+                autoCapitalize="none"
+                style={{ paddingRight: "5rem" }}
+              />
+              <span className="input-suffix">QUSDC</span>
+            </div>
+            {parsedSplit.length > 0 && (
               <p className="text-muted mt-1" style={{ fontSize: "0.8125rem" }}>
-                Each link is for ${(parseFloat(amount) || 0).toFixed(2)} QUSDC
+                {parsedSplit.length} {parsedSplit.length === 1 ? "request" : "requests"} · total ${splitTotal.toFixed(2)} QUSDC
               </p>
             )}
           </div>
@@ -315,11 +339,11 @@ export default function PaymentLinks(): React.ReactElement {
         <button
           className="btn-primary btn-lg"
           onClick={generate}
-          disabled={!recipient.trim() && !address}
+          disabled={(!recipient.trim() && !address) || (mode === "split" && parsedSplit.length === 0)}
           style={{ marginTop: "0.5rem" }}
         >
           {mode === "split"
-            ? `Generate ${parseInt(splitCount) || 1} links`
+            ? `Generate ${parsedSplit.length || 0} ${parsedSplit.length === 1 ? "link" : "links"}`
             : "Generate link"}
         </button>
       </div>
