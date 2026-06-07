@@ -145,7 +145,7 @@ contract E2EGaslessTest {
 
     function _signUserOp(uint256 ownerKey, bytes32 digest) private returns (bytes memory) {
         (uint8 v, bytes32 r, bytes32 s) = VM.sign(ownerKey, digest);
-        return abi.encodePacked(r, s, v);
+        return abi.encode(uint8(0), abi.encodePacked(r, s, v));
     }
 
     function _executeUserOp(Context memory ctx, PackedUserOperation memory userOp) private {

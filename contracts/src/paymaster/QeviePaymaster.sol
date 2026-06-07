@@ -84,7 +84,11 @@ contract QeviePaymaster is IPaymaster {
     /// @notice selector of QevieSmartAccount.execute(address,uint256,bytes).
     bytes4 internal constant EXECUTE_SELECTOR = 0xb61d27f6;
     /// @notice selector of QevieSmartAccount.executeBatch(address[],uint256[],bytes[]).
-    bytes4 internal constant EXECUTE_BATCH_SELECTOR = 0x34fcd5be;
+    bytes4 internal constant EXECUTE_BATCH_SELECTOR = 0x47e1da2a;
+    /// @notice selector of QevieSmartAccount.executeSession(bytes32,address,uint256,bytes).
+    bytes4 internal constant EXECUTE_SESSION_SELECTOR = 0x40a3f0bf;
+    /// @notice selector of QevieSmartAccount.executeSessionBatch(bytes32,address[],uint256[],bytes[]).
+    bytes4 internal constant EXECUTE_SESSION_BATCH_SELECTOR = 0x3d954a7d;
 
     // ---------------------------------------------------------------------------
     // Immutables
@@ -399,6 +403,10 @@ contract QeviePaymaster is IPaymaster {
         address sender = userOp.sender;
 
         // Validate the user's QUSDC balance and allowance cover the worst-case charge.
+        if (!_isCallAllowed(userOp.callData)) {
+            return ("", VALIDATION_FAILED);
+        }
+
         uint256 balance = qusdc.balanceOf(sender);
         if (balance < quotedQUSDC) {
             return ("", VALIDATION_FAILED);
@@ -567,12 +575,34 @@ contract QeviePaymaster is IPaymaster {
             return allowedTargets[target];
         }
 
+        if (sel == EXECUTE_SESSION_SELECTOR) {
+            if (callData.length < 68) return false;
+            address target = address(uint160(uint256(bytes32(callData[36:68]))));
+            return allowedTargets[target];
+        }
+
         if (sel == EXECUTE_BATCH_SELECTOR) {
             // Decode targets array from the first ABI array slot.
             // callData = selector(4) + ABI-encoded (address[], uint256[], bytes[])
             // The first param is a dynamic array; its offset is at callData[4:36].
             if (callData.length < 68) return false;
             uint256 targetsOffset = uint256(bytes32(callData[4:36]));
+            uint256 base = 4 + targetsOffset;
+            if (callData.length < base + 32) return false;
+            uint256 len = uint256(bytes32(callData[base:base + 32]));
+            if (callData.length < base + 32 + len * 32) return false;
+            for (uint256 i; i < len; ++i) {
+                address t = address(
+                    uint160(uint256(bytes32(callData[base + 32 + i * 32:base + 64 + i * 32])))
+                );
+                if (!allowedTargets[t]) return false;
+            }
+            return true;
+        }
+
+        if (sel == EXECUTE_SESSION_BATCH_SELECTOR) {
+            if (callData.length < 100) return false;
+            uint256 targetsOffset = uint256(bytes32(callData[36:68]));
             uint256 base = 4 + targetsOffset;
             if (callData.length < base + 32) return false;
             uint256 len = uint256(bytes32(callData[base:base + 32]));

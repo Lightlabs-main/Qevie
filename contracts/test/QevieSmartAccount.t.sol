@@ -11,6 +11,7 @@ interface Vm {
     function sign(uint256 privateKey, bytes32 digest)
         external
         returns (uint8 v, bytes32 r, bytes32 s);
+    function prank(address sender) external;
 }
 
 contract Counter {
@@ -47,7 +48,7 @@ contract QevieSmartAccountTest {
         bytes32 userOpHash = keccak256("qevie user op");
         PackedUserOperation memory userOp;
         userOp.sender = address(account);
-        userOp.signature = _signUserOp(OWNER_KEY, userOpHash);
+        userOp.signature = _signOwnerUserOp(OWNER_KEY, userOpHash);
 
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
         require(validationData == 0, "owner signature rejected");
@@ -60,7 +61,7 @@ contract QevieSmartAccountTest {
         bytes32 userOpHash = keccak256("qevie bad user op");
         PackedUserOperation memory userOp;
         userOp.sender = address(account);
-        userOp.signature = _signUserOp(OTHER_KEY, userOpHash);
+        userOp.signature = _signOwnerUserOp(OTHER_KEY, userOpHash);
 
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
         require(validationData == 1, "bad signature was not flagged");
@@ -97,13 +98,13 @@ contract QevieSmartAccountTest {
         require(second.number() == 1, "second call did not execute");
     }
 
-    function _signUserOp(uint256 privateKey, bytes32 userOpHash)
+    function _signOwnerUserOp(uint256 privateKey, bytes32 userOpHash)
         private
         returns (bytes memory signature)
     {
         bytes32 digest = _toEthSignedMessageHash(userOpHash);
         (uint8 v, bytes32 r, bytes32 s) = VM.sign(privateKey, digest);
-        signature = abi.encodePacked(r, s, v);
+        signature = abi.encode(uint8(0), abi.encodePacked(r, s, v));
     }
 
     function _toEthSignedMessageHash(bytes32 digest) private pure returns (bytes32) {

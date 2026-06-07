@@ -51,6 +51,7 @@ contract QeviePaymasterTest {
         pair.setReserves(WQIE_RESERVE, QUSDC_RESERVE);
 
         pm = new QeviePaymaster(ep, token, wqie, pair, signer);
+        pm.setAllowedTarget(address(token), true);
 
         // Fund the paymaster's EntryPoint deposit.
         VM.deal(address(pm), 10 ether);
@@ -64,6 +65,12 @@ contract QeviePaymasterTest {
 
     function _buildModeAOp(address sender) internal view returns (PackedUserOperation memory op) {
         op.sender = sender;
+        op.callData = abi.encodeWithSelector(
+            bytes4(0xb61d27f6), // execute(address,uint256,bytes)
+            address(token),
+            uint256(0),
+            bytes("")
+        );
         op.paymasterAndData = abi.encodePacked(
             address(pm), // [0:20]
             uint128(200_000), // paymasterVerificationGasLimit
@@ -345,7 +352,7 @@ contract QeviePaymasterTest {
 
     function testModeBFailsWithDisallowedTarget() external {
         setUp();
-        // Do NOT whitelist the token address.
+        pm.setAllowedTarget(address(token), false);
 
         address user = address(0xCAFE);
         uint32 expiry = uint32(block.timestamp + 3600);

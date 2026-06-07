@@ -122,7 +122,7 @@ contract SmokeUserOp {
             keccak256(abi.encode(_hashUserOp(userOp), address(context.entryPoint), block.chainid));
         bytes32 digest = _toEthSignedMessageHash(userOpHash);
         (uint8 v, bytes32 r, bytes32 s) = VM.sign(context.ownerKey, digest);
-        userOp.signature = abi.encodePacked(r, s, v);
+        userOp.signature = abi.encode(uint8(0), abi.encodePacked(r, s, v));
     }
 
     function _pack(uint256 high128, uint256 low128) private pure returns (bytes32) {
