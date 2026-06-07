@@ -136,6 +136,13 @@ export const SMART_ACCOUNT_ABI = [
   },
   {
     type: "function",
+    name: "agentPolicyManager",
+    inputs: [],
+    outputs: [{ type: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "execute",
     inputs: [
       { name: "target", type: "address" },
@@ -154,6 +161,18 @@ export const SMART_ACCOUNT_ABI = [
       { name: "data", type: "bytes[]" },
     ],
     outputs: [{ type: "bytes[]" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "executeSession",
+    inputs: [
+      { name: "policyId", type: "bytes32" },
+      { name: "target", type: "address" },
+      { name: "value", type: "uint256" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [{ type: "bytes" }],
     stateMutability: "nonpayable",
   },
 ] as const;

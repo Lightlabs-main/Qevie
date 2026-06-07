@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {IEntryPoint} from "../src/interfaces/IEntryPoint.sol";
+import {IAgentPolicyManager} from "../src/agent/IAgentPolicyManager.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
 import {IQIEDexPair} from "../src/interfaces/IQIEDexPair.sol";
 import {QevieSmartAccountFactory} from "../src/account/QevieSmartAccountFactory.sol";
@@ -27,6 +28,7 @@ interface Vm {
 ///   WQIE_ADDRESS              wQIE token (18 decimals)
 ///   DEX_PAIR_ADDRESS          WQIE/QUSDC Uniswap-v2 pair
 ///   TRUSTED_SIGNER_ADDRESS    off-chain paymaster-service signer
+///   AGENT_POLICY_MANAGER_ADDRESS deployed AgentPolicyManager
 ///
 /// After deployment, record all addresses in VERIFICATION.md and fund:
 ///   entryPoint.depositTo{value: ...}(address(paymaster))
@@ -49,10 +51,13 @@ contract DeployAll {
         address wqieAddr = VM.envAddress("WQIE_ADDRESS");
         address dexPairAddr = VM.envAddress("DEX_PAIR_ADDRESS");
         address trustedSigner = VM.envAddress("TRUSTED_SIGNER_ADDRESS");
+        address policyManager = VM.envAddress("AGENT_POLICY_MANAGER_ADDRESS");
 
         VM.startBroadcast(deployerKey);
 
-        QevieSmartAccountFactory factory = new QevieSmartAccountFactory(IEntryPoint(entryPointAddr));
+        QevieSmartAccountFactory factory = new QevieSmartAccountFactory(
+            IEntryPoint(entryPointAddr), IAgentPolicyManager(policyManager)
+        );
 
         QeviePaymaster paymaster = new QeviePaymaster(
             IEntryPoint(entryPointAddr),

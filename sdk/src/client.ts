@@ -4,18 +4,23 @@ import {
   type Address,
   type Hex,
   encodeFunctionData,
+  encodeAbiParameters,
   isAddress,
   keccak256,
+  parseAbiParameters,
   toBytes,
   type PublicClient,
 } from "viem";
 import {
   BATCH_PAYMENTS_ABI,
   PAYMENT_REQUEST_ABI,
+  QUSDC_ABI,
   RECEIPT_REGISTRY_ABI,
+  SMART_ACCOUNT_ABI,
   SUBSCRIPTION_MANAGER_ABI,
   USERNAME_REGISTRY_ABI,
 } from "./abis.js";
+import { AGENT_POLICY_MANAGER_ABI } from "./agent/abis.js";
 import { QevieAccount } from "./account.js";
 import { BundlerClient } from "./bundler.js";
 import { resolveRecipient } from "./resolve.js";
@@ -42,6 +47,13 @@ import type {
   ParsedPaymentLink,
   AllowlistToken,
 } from "./types.js";
+import type {
+  AgentPolicy,
+  AgentPolicyDraft,
+  CreateAgentPolicyOptions,
+  CreateAgentPolicyResult,
+  SessionPaymentInput,
+} from "./agent/types.js";
 import { DEFAULT_GAS } from "./userop.js";
 
 // Use a loose public client type to avoid viem's strict account-field variance checks.
@@ -69,6 +81,20 @@ export class QevieClient {
     getStats: (account: Address) => Promise<PassportStats>;
     getRecentReceipts: (account: Address, limit?: number) => Promise<QevieReceipt[]>;
   };
+  readonly agent: {
+    createSessionPolicy: (
+      signer: QevieSigner,
+      draft: AgentPolicyDraft,
+      options?: CreateAgentPolicyOptions,
+    ) => Promise<CreateAgentPolicyResult>;
+    listSessionPolicies: (smartAccount: Address) => Promise<AgentPolicy[]>;
+    getSessionPolicy: (policyId: Hex) => Promise<AgentPolicy>;
+    executeAutopilotPayment: (
+      sessionSigner: QevieSigner,
+      input: SessionPaymentInput,
+      allowlistToken?: AllowlistToken,
+    ) => Promise<UserOpResult>;
+  };
 
   constructor(config: QevieClientConfig) {
     this.config = config;
@@ -89,6 +115,12 @@ export class QevieClient {
       getStats: this.getStats.bind(this),
       getRecentReceipts: this.getRecentReceipts.bind(this),
     };
+    this.agent = {
+      createSessionPolicy: this.createSessionPolicy.bind(this),
+      listSessionPolicies: this.listSessionPolicies.bind(this),
+      getSessionPolicy: this.getSessionPolicy.bind(this),
+      executeAutopilotPayment: this.executeAutopilotPayment.bind(this),
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -107,6 +139,150 @@ export class QevieClient {
 
   async getSmartAccountAddress(signer: QevieSigner, salt?: bigint): Promise<Address> {
     return this.account(signer, salt).getAddress();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Autopilot
+  // ---------------------------------------------------------------------------
+
+  async createSessionPolicy(
+    signer: QevieSigner,
+    draft: AgentPolicyDraft,
+    options: CreateAgentPolicyOptions = {},
+  ): Promise<CreateAgentPolicyResult> {
+    const manager = this._requireAgentPolicyManager();
+    const account = this.account(signer);
+    const [smartAccount, owner] = await Promise.all([
+      account.getAddress(),
+      signer.getAddress(),
+    ]);
+    const nonce = await this.publicClient.readContract({
+      address: manager,
+      abi: AGENT_POLICY_MANAGER_ABI,
+      functionName: "policyNonce",
+      args: [smartAccount],
+    }) as bigint;
+
+    const policyId = keccak256(encodeAbiParameters(
+      parseAbiParameters(
+        "uint256 chainId, address smartAccount, address sessionKey, address owner, uint256 nonce",
+      ),
+      [BigInt(this.config.chainId), smartAccount, draft.sessionKey, owner, nonce],
+    ));
+
+    const managerCall = encodeFunctionData({
+      abi: AGENT_POLICY_MANAGER_ABI,
+      functionName: "createPolicy",
+      args: [{
+        smartAccount,
+        sessionKey: draft.sessionKey,
+        guardian: draft.guardian,
+        token: this.config.contracts.qusdc,
+        maxPerTx: draft.maxPerTx,
+        dailyLimit: draft.dailyLimit,
+        weeklyLimit: draft.weeklyLimit,
+        totalLimit: draft.totalLimit,
+        maxQusdcGasPerTx: draft.maxQusdcGasPerTx,
+        dailyQusdcGasCap: draft.dailyQusdcGasCap,
+        validAfter: draft.validAfter,
+        validUntil: draft.validUntil,
+        allowSinglePayment: draft.allowSinglePayment,
+        allowBatchPayment: draft.allowBatchPayment,
+        allowPaymentRequest: draft.allowPaymentRequest,
+        allowSubscription: draft.allowSubscription,
+        allowSponsoredGas: draft.allowSponsoredGas,
+        allowQusdcGas: draft.allowQusdcGas,
+        allowNativeQieFallback: draft.allowNativeQieFallback,
+        pauseWhenGasUnavailable: draft.pauseWhenGasUnavailable,
+        recipients: draft.recipients,
+      }],
+    });
+    const callData = this._encodeExecute(manager, 0n, managerCall);
+    const mode = options.mode ?? "sponsored";
+    const token = mode === "sponsored"
+      ? await this.getAllowlistToken(smartAccount)
+      : null;
+    if (mode === "sponsored" && token === null) {
+      throw new Error("Sponsored onboarding is unavailable for this smart account.");
+    }
+    const op = await account.buildAndSign(
+      callData,
+      mode,
+      { ...DEFAULT_GAS, callGasLimit: 650_000n },
+      token ?? undefined,
+    );
+    const userOpHash = await this.bundler.sendUserOperation(
+      op,
+      this.config.contracts.entryPoint,
+    );
+
+    if (options.waitForReceipt === false) {
+      return { policyId, userOpHash };
+    }
+    const result = await this.bundler.waitForUserOp(userOpHash, 50, 1000);
+    if (result.status === "failed") {
+      throw new Error("Policy UserOperation failed on-chain.");
+    }
+    return { policyId, userOpHash, result };
+  }
+
+  async listSessionPolicies(smartAccount: Address): Promise<AgentPolicy[]> {
+    const manager = this._requireAgentPolicyManager();
+    const ids = await this.publicClient.readContract({
+      address: manager,
+      abi: AGENT_POLICY_MANAGER_ABI,
+      functionName: "getPoliciesBySmartAccount",
+      args: [smartAccount],
+    }) as Hex[];
+    return Promise.all(ids.map((id) => this.getSessionPolicy(id)));
+  }
+
+  async getSessionPolicy(policyId: Hex): Promise<AgentPolicy> {
+    const manager = this._requireAgentPolicyManager();
+    const policy = await this.publicClient.readContract({
+      address: manager,
+      abi: AGENT_POLICY_MANAGER_ABI,
+      functionName: "getPolicy",
+      args: [policyId],
+    }) as Omit<AgentPolicy, "policyId">;
+    return { policyId, ...policy };
+  }
+
+  async executeAutopilotPayment(
+    sessionSigner: QevieSigner,
+    input: SessionPaymentInput,
+    allowlistToken?: AllowlistToken,
+  ): Promise<UserOpResult> {
+    const transferData = encodeFunctionData({
+      abi: QUSDC_ABI,
+      functionName: "transfer",
+      args: [input.recipient, input.amount],
+    });
+    const callData = encodeFunctionData({
+      abi: SMART_ACCOUNT_ABI,
+      functionName: "executeSession",
+      args: [
+        input.policyId,
+        this.config.contracts.qusdc,
+        0n,
+        transferData,
+      ],
+    });
+    const account = this.account(sessionSigner);
+    const op = await account.buildAndSignSession(
+      input.smartAccount,
+      input.policyId,
+      callData,
+      input.mode,
+      sessionSigner,
+      { ...DEFAULT_GAS, callGasLimit: 400_000n },
+      allowlistToken,
+    );
+    const userOpHash = await this.bundler.sendUserOperation(
+      op,
+      this.config.contracts.entryPoint,
+    );
+    return this.bundler.waitForUserOp(userOpHash);
   }
 
   /**
@@ -568,6 +744,14 @@ export class QevieClient {
       functionName: "execute",
       args: [target, value, data],
     });
+  }
+
+  private _requireAgentPolicyManager(): Address {
+    const manager = this.config.contracts.agentPolicyManager;
+    if (manager === undefined) {
+      throw new Error("AgentPolicyManager is not configured for this chain.");
+    }
+    return manager;
   }
 
   private async _waitForRegisteredUsername(

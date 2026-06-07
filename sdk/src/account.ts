@@ -21,6 +21,8 @@ import {
   hashUserOp,
   buildModeAPaymasterData,
   buildModeBPaymasterData,
+  encodeOwnerSignature,
+  encodeSessionSignature,
 } from "./userop.js";
 
 // Use a loose public client type to avoid viem's strict account-field variance checks.
@@ -195,8 +197,61 @@ export class QevieAccount {
 
     const opHash = hashUserOp(op, this.contracts.entryPoint, this.chainId);
     const rawSig = await this.signer.signMessage(opHash);
-    op.signature = rawSig;
+    op.signature = encodeOwnerSignature(rawSig);
 
+    return op;
+  }
+
+  async buildAndSignSession(
+    smartAccount: Address,
+    policyId: Hex,
+    callData: Hex,
+    mode: GasMode,
+    sessionSigner: QevieSigner,
+    gasConfig: GasConfig = DEFAULT_GAS,
+    allowlistToken?: AllowlistToken,
+  ): Promise<PackedUserOp> {
+    const nonce = await this.publicClient.readContract({
+      address: this.contracts.entryPoint,
+      abi: ENTRY_POINT_ABI,
+      functionName: "getNonce",
+      args: [smartAccount, 0n],
+    }) as bigint;
+
+    let paymasterAndData: Hex;
+    if (mode === "self") {
+      paymasterAndData = "0x";
+    } else if (mode === "sponsored") {
+      if (allowlistToken === undefined) {
+        throw new Error("Allowlist token required for sponsored mode");
+      }
+      paymasterAndData = buildModeBPaymasterData(
+        this.contracts.paymaster,
+        gasConfig,
+        allowlistToken,
+      );
+    } else {
+      paymasterAndData = buildModeAPaymasterData(this.contracts.paymaster, gasConfig);
+    }
+
+    const op: PackedUserOp = {
+      sender: smartAccount,
+      nonce,
+      initCode: "0x",
+      callData,
+      accountGasLimits: packAccountGasLimits(
+        gasConfig.verificationGasLimit,
+        gasConfig.callGasLimit,
+      ),
+      preVerificationGas: gasConfig.preVerificationGas,
+      gasFees: packGasFees(gasConfig.maxPriorityFeePerGas, gasConfig.maxFeePerGas),
+      paymasterAndData,
+      signature: "0x",
+    };
+    const opHash = hashUserOp(op, this.contracts.entryPoint, this.chainId);
+    const rawSig = await sessionSigner.signMessage(opHash);
+    const sessionKey = await sessionSigner.getAddress();
+    op.signature = encodeSessionSignature(policyId, sessionKey, rawSig);
     return op;
   }
 }

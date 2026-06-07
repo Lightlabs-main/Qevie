@@ -115,9 +115,7 @@ contract QevieSmartAccountSessionKeyTest {
         manager = new AgentPolicyManager();
         manager.setAllowedTarget(address(token), true);
 
-        account = new QevieSmartAccount(IEntryPoint(address(this)), owner);
-        VM.prank(owner);
-        account.setAgentPolicyManager(address(manager));
+        account = new QevieSmartAccount(IEntryPoint(address(this)), owner, address(manager));
 
         address[] memory recipients = new address[](1);
         recipients[0] = recipient;

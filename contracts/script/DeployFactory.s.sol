@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {IEntryPoint} from "../src/interfaces/IEntryPoint.sol";
+import {IAgentPolicyManager} from "../src/agent/IAgentPolicyManager.sol";
 import {QevieSmartAccountFactory} from "../src/account/QevieSmartAccountFactory.sol";
 
 interface Vm {
@@ -18,9 +19,12 @@ contract DeployFactory {
     function run() external returns (QevieSmartAccountFactory factory) {
         uint256 deployerKey = VM.envUint("TESTNET_PRIVATE_KEY");
         address entryPoint = VM.envAddress("ENTRYPOINT_ADDRESS");
+        address policyManager = VM.envAddress("AGENT_POLICY_MANAGER_ADDRESS");
 
         VM.startBroadcast(deployerKey);
-        factory = new QevieSmartAccountFactory(IEntryPoint(entryPoint));
+        factory = new QevieSmartAccountFactory(
+            IEntryPoint(entryPoint), IAgentPolicyManager(policyManager)
+        );
         VM.stopBroadcast();
     }
 }

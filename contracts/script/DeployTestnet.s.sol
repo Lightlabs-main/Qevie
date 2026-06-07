@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {IEntryPoint} from "../src/interfaces/IEntryPoint.sol";
+import {IAgentPolicyManager} from "../src/agent/IAgentPolicyManager.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
 import {IQIEDexPair} from "../src/interfaces/IQIEDexPair.sol";
 import {QevieSmartAccountFactory} from "../src/account/QevieSmartAccountFactory.sol";
@@ -51,6 +52,7 @@ contract DeployTestnet {
         uint256 deployerKey = VM.envUint("DEPLOY_PRIVATE_KEY");
         address entryPointAddr = VM.envAddress("ENTRYPOINT_ADDRESS");
         address trustedSigner = VM.envAddress("TRUSTED_SIGNER_ADDRESS");
+        address policyManager = VM.envAddress("AGENT_POLICY_MANAGER_ADDRESS");
 
         VM.startBroadcast(deployerKey);
 
@@ -63,7 +65,9 @@ contract DeployTestnet {
         pair.setReserves(INIT_WQIE_RESERVE, INIT_QUSDC_RESERVE);
 
         // 3. Deploy smart account factory.
-        QevieSmartAccountFactory factory = new QevieSmartAccountFactory(IEntryPoint(entryPointAddr));
+        QevieSmartAccountFactory factory = new QevieSmartAccountFactory(
+            IEntryPoint(entryPointAddr), IAgentPolicyManager(policyManager)
+        );
 
         // 4. Deploy paymaster.
         QeviePaymaster paymaster = new QeviePaymaster(

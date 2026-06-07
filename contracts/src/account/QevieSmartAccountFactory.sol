@@ -2,29 +2,42 @@
 pragma solidity ^0.8.24;
 
 import {IEntryPoint} from "../interfaces/IEntryPoint.sol";
+import {IAgentPolicyManager} from "../agent/IAgentPolicyManager.sol";
 import {QevieSmartAccount} from "./QevieSmartAccount.sol";
 
 /// @title QevieSmartAccountFactory
 /// @notice Deterministic CREATE2 factory for qevie ERC-4337 smart accounts.
 contract QevieSmartAccountFactory {
     IEntryPoint private immutable ENTRY_POINT;
+    IAgentPolicyManager private immutable AGENT_POLICY_MANAGER;
 
     event AccountCreated(address indexed account, address indexed owner, uint256 indexed salt);
 
     error InvalidEntryPoint();
+    error InvalidPolicyManager();
     error InvalidOwner();
 
     /// @param anEntryPoint The trusted ERC-4337 EntryPoint v0.7 contract used by new accounts.
-    constructor(IEntryPoint anEntryPoint) {
+    /// @param aPolicyManager The on-chain policy manager assigned to all accounts.
+    constructor(IEntryPoint anEntryPoint, IAgentPolicyManager aPolicyManager) {
         if (address(anEntryPoint) == address(0)) {
             revert InvalidEntryPoint();
         }
+        if (address(aPolicyManager) == address(0)) {
+            revert InvalidPolicyManager();
+        }
         ENTRY_POINT = anEntryPoint;
+        AGENT_POLICY_MANAGER = aPolicyManager;
     }
 
     /// @notice Return the trusted ERC-4337 EntryPoint assigned to new accounts.
     function entryPoint() public view returns (IEntryPoint) {
         return ENTRY_POINT;
+    }
+
+    /// @notice Return the policy manager assigned to accounts created by this factory.
+    function agentPolicyManager() public view returns (IAgentPolicyManager) {
+        return AGENT_POLICY_MANAGER;
     }
 
     /// @notice Create an account for `owner` and `salt`, or return the existing account.
@@ -41,7 +54,9 @@ contract QevieSmartAccountFactory {
             return QevieSmartAccount(payable(predicted));
         }
 
-        account = new QevieSmartAccount{salt: _create2Salt(owner, salt)}(ENTRY_POINT, owner);
+        account = new QevieSmartAccount{salt: _create2Salt(owner, salt)}(
+            ENTRY_POINT, owner, address(AGENT_POLICY_MANAGER)
+        );
         emit AccountCreated(address(account), owner, salt);
     }
 
@@ -52,7 +67,10 @@ contract QevieSmartAccountFactory {
         }
 
         bytes memory initCode =
-            abi.encodePacked(type(QevieSmartAccount).creationCode, abi.encode(ENTRY_POINT, owner));
+            abi.encodePacked(
+                type(QevieSmartAccount).creationCode,
+                abi.encode(ENTRY_POINT, owner, address(AGENT_POLICY_MANAGER))
+            );
         bytes32 initCodeHash;
         assembly {
             initCodeHash := keccak256(add(initCode, 0x20), mload(initCode))

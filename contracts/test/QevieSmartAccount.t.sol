@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {IEntryPoint} from "../src/interfaces/IEntryPoint.sol";
+import {IAgentPolicyManager} from "../src/agent/IAgentPolicyManager.sol";
 import {PackedUserOperation} from "../src/interfaces/PackedUserOperation.sol";
 import {QevieSmartAccount} from "../src/account/QevieSmartAccount.sol";
 import {QevieSmartAccountFactory} from "../src/account/QevieSmartAccountFactory.sol";
@@ -29,7 +30,9 @@ contract QevieSmartAccountTest {
 
     function testFactoryReturnsCounterfactualAddress() external {
         address owner = VM.addr(OWNER_KEY);
-        QevieSmartAccountFactory factory = new QevieSmartAccountFactory(IEntryPoint(address(this)));
+        QevieSmartAccountFactory factory = new QevieSmartAccountFactory(
+            IEntryPoint(address(this)), IAgentPolicyManager(address(1))
+        );
 
         address predicted = factory.getAddress(owner, 7);
         QevieSmartAccount account = factory.createAccount(owner, 7);
@@ -43,7 +46,8 @@ contract QevieSmartAccountTest {
 
     function testValidateUserOpAcceptsOwnerSignature() external {
         address owner = VM.addr(OWNER_KEY);
-        QevieSmartAccount account = new QevieSmartAccount(IEntryPoint(address(this)), owner);
+        QevieSmartAccount account =
+            new QevieSmartAccount(IEntryPoint(address(this)), owner, address(1));
 
         bytes32 userOpHash = keccak256("qevie user op");
         PackedUserOperation memory userOp;
@@ -56,7 +60,8 @@ contract QevieSmartAccountTest {
 
     function testValidateUserOpFlagsBadSignatureWithoutReverting() external {
         address owner = VM.addr(OWNER_KEY);
-        QevieSmartAccount account = new QevieSmartAccount(IEntryPoint(address(this)), owner);
+        QevieSmartAccount account =
+            new QevieSmartAccount(IEntryPoint(address(this)), owner, address(1));
 
         bytes32 userOpHash = keccak256("qevie bad user op");
         PackedUserOperation memory userOp;
@@ -69,7 +74,8 @@ contract QevieSmartAccountTest {
 
     function testEntryPointCanExecuteCall() external {
         address owner = VM.addr(OWNER_KEY);
-        QevieSmartAccount account = new QevieSmartAccount(IEntryPoint(address(this)), owner);
+        QevieSmartAccount account =
+            new QevieSmartAccount(IEntryPoint(address(this)), owner, address(1));
         Counter counter = new Counter();
 
         account.execute(address(counter), 0, abi.encodeCall(Counter.increment, ()));
@@ -79,7 +85,8 @@ contract QevieSmartAccountTest {
 
     function testBatchExecuteIsAtomic() external {
         address owner = VM.addr(OWNER_KEY);
-        QevieSmartAccount account = new QevieSmartAccount(IEntryPoint(address(this)), owner);
+        QevieSmartAccount account =
+            new QevieSmartAccount(IEntryPoint(address(this)), owner, address(1));
         Counter first = new Counter();
         Counter second = new Counter();
 

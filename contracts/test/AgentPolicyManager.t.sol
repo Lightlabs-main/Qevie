@@ -31,7 +31,8 @@ contract AgentPolicyManagerTest {
         AgentPolicyManager manager = new AgentPolicyManager();
         manager.setAllowedTarget(address(token), true);
 
-        QevieSmartAccount account = new QevieSmartAccount(IEntryPoint(address(this)), owner);
+        QevieSmartAccount account =
+            new QevieSmartAccount(IEntryPoint(address(this)), owner, address(manager));
 
         IAgentPolicyManager.CreateAgentPolicyParams memory params = _policyParams(
             address(account), sessionKey, guardian, address(token), recipient
@@ -62,7 +63,8 @@ contract AgentPolicyManagerTest {
         AgentPolicyManager manager = new AgentPolicyManager();
         manager.setAllowedTarget(address(token), true);
 
-        QevieSmartAccount account = new QevieSmartAccount(IEntryPoint(address(this)), owner);
+        QevieSmartAccount account =
+            new QevieSmartAccount(IEntryPoint(address(this)), owner, address(manager));
 
         IAgentPolicyManager.CreateAgentPolicyParams memory params = _policyParams(
             address(account), sessionKey, guardian, address(token), recipient
@@ -99,7 +101,8 @@ contract AgentPolicyManagerTest {
         AgentPolicyManager manager = new AgentPolicyManager();
         manager.setAllowedTarget(address(token), true);
 
-        QevieSmartAccount account = new QevieSmartAccount(IEntryPoint(address(this)), owner);
+        QevieSmartAccount account =
+            new QevieSmartAccount(IEntryPoint(address(this)), owner, address(manager));
 
         IAgentPolicyManager.CreateAgentPolicyParams memory params = _policyParams(
             address(account), sessionKey, guardian, address(token), recipient

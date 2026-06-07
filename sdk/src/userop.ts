@@ -130,6 +130,28 @@ export function hashUserOp(op: PackedUserOp, entryPoint: Address, chainId: numbe
   );
 }
 
+export function encodeOwnerSignature(rawSignature: Hex): Hex {
+  return encodeAbiParameters(
+    parseAbiParameters("uint8 mode, bytes signatureData"),
+    [0, rawSignature],
+  );
+}
+
+export function encodeSessionSignature(
+  policyId: Hex,
+  sessionKey: Address,
+  rawSignature: Hex,
+): Hex {
+  const signatureData = encodeAbiParameters(
+    parseAbiParameters("bytes32 policyId, address sessionKey, bytes signature"),
+    [policyId, sessionKey, rawSignature],
+  );
+  return encodeAbiParameters(
+    parseAbiParameters("uint8 mode, bytes signatureData"),
+    [1, signatureData],
+  );
+}
+
 /** Build the callData for QevieSmartAccount.execute(target, value, data). */
 export function encodeExecute(target: Address, value: bigint, data: Hex): Hex {
   return encodeAbiParameters(

@@ -85,15 +85,18 @@ contract QevieSmartAccount is IAccount {
         _nonReentrantAfter();
     }
 
-    constructor(IEntryPoint anEntryPoint, address initialOwner) payable {
+    constructor(IEntryPoint anEntryPoint, address initialOwner, address initialPolicyManager) payable {
         if (address(anEntryPoint) == address(0)) revert InvalidEntryPoint();
         if (initialOwner == address(0)) revert InvalidOwner();
+        if (initialPolicyManager == address(0)) revert InvalidPolicyManager();
 
         ENTRY_POINT = anEntryPoint;
         owner = initialOwner;
+        agentPolicyManager = IAgentPolicyManager(initialPolicyManager);
         _reentrancyStatus = _NOT_ENTERED;
 
         emit QevieAccountInitialized(address(anEntryPoint), initialOwner);
+        emit AgentPolicyManagerUpdated(address(0), initialPolicyManager);
     }
 
     receive() external payable {}

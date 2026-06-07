@@ -20,6 +20,14 @@ export { buildPaymentUri, parsePaymentUri, buildShareUrl } from "./links.js";
 // Name resolution
 export { resolveRecipient } from "./resolve.js";
 export { stableStringify, hashReceiptMetadata } from "./receipts.js";
+export { AGENT_POLICY_MANAGER_ABI } from "./agent/index.js";
+export type {
+  AgentPolicy,
+  AgentPolicyDraft,
+  CreateAgentPolicyOptions,
+  CreateAgentPolicyResult,
+  SessionPaymentInput,
+} from "./agent/index.js";
 
 // Types
 export type {
