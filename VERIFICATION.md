@@ -302,8 +302,26 @@ Target configuration transaction hashes:
 - PaymentRequest: `0x0b7b423af5dffdb3fc1c2b25cadc5e84f6c4d5ec96c8761ea5d412997093527b`
 - SubscriptionManager: `0xa8bfa883e74f58b7ee6b55c9789bfa89955633cd876d4f5802148d389da9b088`
 
-The manager is deployed and configured. Policy creation remains UI-disabled until the SDK
-policy transaction and upgraded smart-account session UserOp path are deployed and tested.
+### Autopilot Smart Account Factory And Policy Smoke Test
+
+| Component | Address | Tx Hash | Status |
+| --- | --- | --- | --- |
+| Autopilot-compatible QevieSmartAccountFactory | `0xF4cB7EB568cca9714aD3A6adCAFAaBFB39eA6E14` | `0x79ca84bdc277bdcea1de9221ead62fc1e3569210e97a2eb86a91e185cfd8b718` | Deployed on QIE testnet |
+| Paymaster AgentPolicyManager target allowlist | `0x1cdD6BC4258F590E0ea2b10E82a8162384d7f5f2` | `0x426cedfc862cc41cff90b1bf0e3b5d9cf9086521d2056ca943c73c58bc31056e` | Manager target enabled |
+| Sponsored policy creation smoke test | `0x275271dD994796F1DAD146514A16F8145613f88d` | `0x6bfee42f5339c2764af1cd85d4e2ccaafd61e81e55f09d9662dfceee48aa92ba` | Account deployed and policy created through EntryPoint |
+
+Observed via RPC:
+
+- factory `entryPoint()` = `0xa07d2Ff33400fbE2c741385cb959D5BCbA041493`
+- factory `agentPolicyManager()` = `0x5E0FABf9aD44a21A38775942a1041c55fbAAE89A`
+- paymaster `allowedTargets(AgentPolicyManager)` = `true`
+- smoke account deployed bytecode size = `6716` bytes
+- smoke account `agentPolicyManager()` = `0x5E0FABf9aD44a21A38775942a1041c55fbAAE89A`
+- created policy ID = `0x353f632d6e7a0b7409b2d5e823f8a9dbe13f6581a04e18fac5a6b95de4322821`
+
+This verifies owner signature-envelope validation, counterfactual account deployment,
+paymaster-sponsored policy creation, smart-account manager binding, and on-chain policy indexing.
+The app policy form and policies page use the SDK path verified by this smoke test.
 
 2. Fund `QeviePaymaster` EntryPoint deposit: `entryPoint.depositTo{value: 1 ether}(paymasterAddress)`.
 
