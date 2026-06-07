@@ -4,6 +4,7 @@ import { APP_CONFIG } from "../config.js";
 
 export default function AutopilotNew(): React.ReactElement {
   const configured = APP_CONFIG.agentPolicyManager !== undefined;
+  const executionEnabled = APP_CONFIG.autopilotExecutionEnabled;
   const [gasFallback, setGasFallback] = useState("sponsored-qusdc");
 
   return (
@@ -79,14 +80,19 @@ export default function AutopilotNew(): React.ReactElement {
           <Check label="Pause if QIEDex quote is unavailable" defaultChecked />
         </section>
 
-        {!configured && (
+        {!configured ? (
           <div className="alert alert-error">
             AgentPolicyManager is not configured for this chain. Policy creation is disabled
             until a verified deployment is added as `VITE_AGENT_POLICY_MANAGER_ADDRESS`.
           </div>
-        )}
+        ) : !executionEnabled ? (
+          <div className="alert alert-info">
+            AgentPolicyManager is deployed at {APP_CONFIG.agentPolicyManager}. Policy creation
+            remains disabled until session UserOp submission is enabled.
+          </div>
+        ) : null}
 
-        <button className="btn-primary btn-lg" disabled={!configured}>
+        <button className="btn-primary btn-lg" disabled={!configured || !executionEnabled}>
           Create Autopilot Policy
         </button>
       </div>

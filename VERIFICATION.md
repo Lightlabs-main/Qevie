@@ -274,6 +274,37 @@ Observed via RPC:
 - `owner()` = `0xfF88D1Fd6BEf257d8E76c035B6229700B23167e1`
 - `authorizedIssuers(0x7827C8E29CC81BB70FA2DEc862De722305a3050d)` = `true`
 
+### AgentPolicyManager Testnet Deployment
+
+Date: 2026-06-07
+
+| Component | Address | Tx Hash | Status |
+| --- | --- | --- | --- |
+| AgentPolicyManager | `0x5E0FABf9aD44a21A38775942a1041c55fbAAE89A` | `0x40094b7cff79a1301c238318ec87f4669159287b6b619b73c77422fc073ddaab` | Deployed on QIE testnet |
+
+Explorer:
+
+- https://testnet.qie.digital/address/0x5E0FABf9aD44a21A38775942a1041c55fbAAE89A
+
+Observed via RPC on chain `1983`:
+
+- deployed bytecode size = `11016` bytes
+- `owner()` = `0xfF88D1Fd6BEf257d8E76c035B6229700B23167e1`
+- QUSDC target `0x850E073f0E7536A03fE22DB0CFBeA08e6DB3e18f` allowed = `true`
+- BatchPayments target `0xb07fff088D37355EAD2f4226e208DAA32f7b6a19` allowed = `true`
+- PaymentRequest target `0x9ee2d86248F3811E6e63d7C7F025E717AAE877aB` allowed = `true`
+- SubscriptionManager target `0x0705e239bF3F8250DADA4aad1051C33C32fb988a` allowed = `true`
+
+Target configuration transaction hashes:
+
+- QUSDC: `0xa67111bb1171673fdac11a5ec3adb6b333a2c8b75559a72c9f5768f9cf4b2755`
+- BatchPayments: `0xded2c26c0e8072458432409d845f9bd6554b84fca586f04d29628b1e189457f9`
+- PaymentRequest: `0x0b7b423af5dffdb3fc1c2b25cadc5e84f6c4d5ec96c8761ea5d412997093527b`
+- SubscriptionManager: `0xa8bfa883e74f58b7ee6b55c9789bfa89955633cd876d4f5802148d389da9b088`
+
+The manager is deployed and configured. Policy creation remains UI-disabled until the SDK
+policy transaction and upgraded smart-account session UserOp path are deployed and tested.
+
 2. Fund `QeviePaymaster` EntryPoint deposit: `entryPoint.depositTo{value: 1 ether}(paymasterAddress)`.
 
 3. Test Mode B allowlist token issuance via paymaster-service API.

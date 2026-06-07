@@ -66,7 +66,7 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
   - Real bundler (Voltaire) E2E not yet tested through full UserOp lifecycle
   - ReceiptRegistry is implemented but not yet deployed and verified on QIE; Passport/Receipt UI stays config-gated until `VITE_RECEIPT_REGISTRY_ADDRESS` is set to a verified deployment
   - Autopilot SDK transaction methods and service agents are not implemented yet
-  - AgentPolicyManager is not deployed or verified, so policy creation is correctly disabled in the app
+  - AgentPolicyManager is deployed and RPC-verified on QIE testnet; policy creation remains disabled until SDK session transaction submission and the upgraded account path are deployed
 - What is built and tested:
   - Contracts: QevieSmartAccount, Factory, QeviePaymaster (Mode A + B), BatchPayments, 
     PaymentRequest, SubscriptionManager, UsernameRegistry, ReceiptRegistry, AgentPolicyManager, and session-key execution path — Foundry suite passing locally and on VPS (62 tests)
@@ -80,5 +80,5 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
   2. Implement Autopilot service agents, audit logs, and gas decision flow
   3. Add explicit gas-mode UX to current payment confirmation flows
   4. Run Voltaire bundler + end-to-end gasless/session UserOp tests on QIE testnet
-  5. Deploy and verify ReceiptRegistry and Autopilot contracts on testnet, then mainnet 1990
+  5. Deploy the upgraded smart-account/factory path and verify full Autopilot execution on testnet, then deploy to mainnet 1990
   6. Fund paymaster EntryPoint deposit and complete ship checklist

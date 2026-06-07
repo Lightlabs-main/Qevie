@@ -9,6 +9,7 @@ interface ImportMetaEnv {
   readonly VITE_APP_BASE_URL?: string;
   readonly VITE_SKIP_CONTRACT_CHECK?: string;
   readonly VITE_AGENT_POLICY_MANAGER_ADDRESS?: string;
+  readonly VITE_AUTOPILOT_EXECUTION_ENABLED?: string;
 }
 
 interface ImportMeta {

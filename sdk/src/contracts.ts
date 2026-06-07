@@ -9,6 +9,7 @@ export interface QevieContracts {
   subscriptionManager: Address;
   usernameRegistry: Address;
   receiptRegistry?: Address;
+  agentPolicyManager?: Address;
   qusdc: Address;
   wqie: Address;
   dexPair: Address;
@@ -27,6 +28,7 @@ export const TESTNET_CONTRACTS: QevieContracts = {
   paymentRequest: "0x9ee2d86248F3811E6e63d7C7F025E717AAE877aB",
   subscriptionManager: "0x0705e239bF3F8250DADA4aad1051C33C32fb988a",
   usernameRegistry: "0x82f50077a8cB6988DF4bBB9B8BD9f92F95975bF4",
+  agentPolicyManager: "0x5E0FABf9aD44a21A38775942a1041c55fbAAE89A",
   qusdc: "0x850E073f0E7536A03fE22DB0CFBeA08e6DB3e18f",
   wqie: "0xb905700A0DF3eA5990710F88C7EDF0Af6e8884c5",
   dexPair: "0xd94975d051634C4422D84dA9D4D89DC9Fb00DC5F",

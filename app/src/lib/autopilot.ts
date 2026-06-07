@@ -7,6 +7,7 @@ export interface AutopilotGasStatus {
   sponsoredUsed: number;
   qusdcGasConfigured: boolean;
   policyManagerConfigured: boolean;
+  executionEnabled: boolean;
   status: "active" | "paused";
   reason: string;
 }
@@ -35,20 +36,25 @@ export async function getAutopilotGasStatus(
       sponsoredUsed: 3,
       qusdcGasConfigured: true,
       policyManagerConfigured: APP_CONFIG.agentPolicyManager !== undefined,
+      executionEnabled: APP_CONFIG.autopilotExecutionEnabled,
       status: "paused",
       reason: "Paymaster status is unavailable.",
     };
   }
 
   const policyManagerConfigured = APP_CONFIG.agentPolicyManager !== undefined;
+  const executionEnabled = APP_CONFIG.autopilotExecutionEnabled;
   return {
     sponsoredRemaining,
     sponsoredUsed: Math.max(0, 3 - sponsoredRemaining),
     qusdcGasConfigured: true,
     policyManagerConfigured,
-    status: policyManagerConfigured ? "active" : "paused",
-    reason: policyManagerConfigured
-      ? "A valid gas route is available."
-      : "AgentPolicyManager is not configured for this deployment.",
+    executionEnabled,
+    status: policyManagerConfigured && executionEnabled ? "active" : "paused",
+    reason: !policyManagerConfigured
+      ? "AgentPolicyManager is not configured for this deployment."
+      : executionEnabled
+        ? "A valid gas route is available."
+        : "AgentPolicyManager is deployed, but session UserOp submission is not enabled yet.",
   };
 }
