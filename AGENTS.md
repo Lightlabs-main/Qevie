@@ -56,7 +56,7 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
 -> Phase 6 Mainnet deploy + verify -> Phase 7 Ship.
 
 ## Status / Handoff (keep current)
-- Current phase: Autopilot Phase 0 complete / contract foundation in progress — merged Autopilot + sustainable gas implementation plan added; session-key policy contracts and smart-account/paymaster contract changes implemented locally and synced to VPS
+- Current phase: Autopilot contract foundation and config-gated app UI complete — session-key policy contracts, smart-account/paymaster changes, Autopilot dashboard, policy form, policy list, activity page, gas status, and pipeline UI implemented
 - 4337 vs relayer decision: ERC-4337 via Voltaire unsafe/no-trace bundler (direct handleOps smoke test confirmed on testnet)
 - Verified addresses: see VERIFICATION.md
 - Open blockers: 
@@ -65,20 +65,20 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
   - QIE Pass on-chain gating unavailable; using QIE Domain + signed allowlist fallback
   - Real bundler (Voltaire) E2E not yet tested through full UserOp lifecycle
   - ReceiptRegistry is implemented but not yet deployed and verified on QIE; Passport/Receipt UI stays config-gated until `VITE_RECEIPT_REGISTRY_ADDRESS` is set to a verified deployment
-  - Autopilot SDK, service agents, and app UI are not implemented yet; only the contract foundation and tests are in place
+  - Autopilot SDK transaction methods and service agents are not implemented yet
+  - AgentPolicyManager is not deployed or verified, so policy creation is correctly disabled in the app
 - What is built and tested:
   - Contracts: QevieSmartAccount, Factory, QeviePaymaster (Mode A + B), BatchPayments, 
     PaymentRequest, SubscriptionManager, UsernameRegistry, ReceiptRegistry, AgentPolicyManager, and session-key execution path — Foundry suite passing locally and on VPS (62 tests)
   - SDK: @qevie/sdk core + React hooks + receipt/passport methods — builds ESM+CJS, typechecks clean, vitest receipt suite passing
-  - App: React PWA with all pages (Onboarding, Home, Send, Request, Scan, Batch, 
-    Subscriptions, Dashboard, Profile, PayLink, History, Passport, Receipt Detail, Developers) — typechecks clean
+  - App: React PWA with payment, Passport, and Autopilot pages (`/autopilot`, `/autopilot/new`, `/autopilot/policies`, `/autopilot/activity`) — typecheck, lint, and production build passing
   - paymaster-service: allowlist token API + subscription keeper + receipt issuance endpoint — typechecks clean
   - infra: Voltaire bundler docker-compose (unsafe mode)
   - docs: `docs/QEVIE_AUTOPILOT_IMPLEMENTATION_PLAN.md` added with merged Path B + sustainable gas plan
 - Next action: 
   1. Extend the SDK for session policies, session UserOps, and normalized gas-mode APIs
   2. Implement Autopilot service agents, audit logs, and gas decision flow
-  3. Add Autopilot UI routes plus explicit gas-mode UX to current payment flows
+  3. Add explicit gas-mode UX to current payment confirmation flows
   4. Run Voltaire bundler + end-to-end gasless/session UserOp tests on QIE testnet
   5. Deploy and verify ReceiptRegistry and Autopilot contracts on testnet, then mainnet 1990
   6. Fund paymaster EntryPoint deposit and complete ship checklist

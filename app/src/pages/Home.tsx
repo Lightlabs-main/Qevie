@@ -56,6 +56,7 @@ export default function Home(): React.ReactElement {
     { to: "/links", label: "Links", icon: "🔗", color: "#38bdf8" },
     { to: "/history", label: "History", icon: "🕘", color: "#818cf8" },
     { to: "/passport", label: "Passport", icon: "🪪", color: "#22c55e" },
+    { to: "/autopilot", label: "Autopilot", icon: "A", color: "#a78bfa" },
     { to: "/developers", label: "Developers", icon: "⌘", color: "#fb7185" },
   ];
 

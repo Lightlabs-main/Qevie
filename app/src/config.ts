@@ -18,6 +18,7 @@ const appBaseUrl = import.meta.env["VITE_APP_BASE_URL"] ?? "https://app.qevie.io
 
 const contractAddresses = isTestnet ? TESTNET_CONTRACTS : MAINNET_CONTRACTS;
 const receiptRegistry = import.meta.env["VITE_RECEIPT_REGISTRY_ADDRESS"];
+const agentPolicyManager = import.meta.env["VITE_AGENT_POLICY_MANAGER_ADDRESS"];
 
 if (receiptRegistry !== undefined && receiptRegistry !== "") {
   contractAddresses.receiptRegistry = receiptRegistry as `0x${string}`;
@@ -38,5 +39,9 @@ export const APP_CONFIG = {
   bundlerUrl,
   paymasterServiceUrl,
   appBaseUrl,
+  agentPolicyManager:
+    agentPolicyManager !== undefined && agentPolicyManager !== ""
+      ? agentPolicyManager as `0x${string}`
+      : undefined,
   contracts: contractAddresses as QevieContracts,
 };

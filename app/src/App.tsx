@@ -17,6 +17,10 @@ const Developers = lazy(() => import("./pages/Developers.js"));
 const Onboarding = lazy(() => import("./pages/Onboarding.js"));
 const PayLink = lazy(() => import("./pages/PayLink.js"));
 const BatchPay = lazy(() => import("./pages/BatchPay.js"));
+const Autopilot = lazy(() => import("./pages/Autopilot.js"));
+const AutopilotNew = lazy(() => import("./pages/AutopilotNew.js"));
+const AutopilotPolicies = lazy(() => import("./pages/AutopilotPolicies.js"));
+const AutopilotActivity = lazy(() => import("./pages/AutopilotActivity.js"));
 
 function LoadingPage(): React.ReactElement {
   return (
@@ -59,6 +63,10 @@ export default function App(): React.ReactElement {
             <Route path="/passport/:accountOrUsername" element={<Passport />} />
             <Route path="/receipt/:receiptId" element={<ReceiptDetail />} />
             <Route path="/developers" element={<Developers />} />
+            <Route path="/autopilot" element={<Autopilot />} />
+            <Route path="/autopilot/new" element={<AutopilotNew />} />
+            <Route path="/autopilot/policies" element={<AutopilotPolicies />} />
+            <Route path="/autopilot/activity" element={<AutopilotActivity />} />
             <Route path="/pay" element={<PayLink />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
