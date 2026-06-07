@@ -23,7 +23,7 @@ contract AutopilotPolicySmoke {
     Vm private constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     uint256 private constant SALT = 909_001;
-    uint256 private constant VERIFICATION_GAS = 1_500_000;
+    uint256 private constant VERIFICATION_GAS = 3_000_000;
     uint256 private constant CALL_GAS = 800_000;
     uint256 private constant PAYMASTER_VERIFICATION_GAS = 500_000;
     uint256 private constant PAYMASTER_POSTOP_GAS = 200_000;
