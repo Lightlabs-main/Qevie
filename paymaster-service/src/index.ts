@@ -16,6 +16,7 @@ import { type IncomingMessage, type ServerResponse, createServer } from "node:ht
 import { type Address, type Hex, isAddress } from "viem";
 import { issueAllowlistToken } from "./allowlist.js";
 import { startKeeper } from "./keeper.js";
+import { startDexHeartbeat } from "./dex-heartbeat.js";
 import { PORT } from "./config.js";
 import { issueReceipt } from "./receipts.js";
 import { provisionSessionKey } from "./session-keys.js";
@@ -228,6 +229,7 @@ server.listen(PORT, () => {
 
 startKeeper();
 startAutopilotExecutor();
+startDexHeartbeat();
 
 process.on("SIGTERM", () => {
   server.close(() => process.exit(0));

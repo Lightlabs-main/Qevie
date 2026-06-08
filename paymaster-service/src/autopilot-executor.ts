@@ -20,6 +20,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import {
   PAYMASTER_ABI,
+  QUSDC_ABI,
   createQevieClient,
   hashReceiptMetadata,
   type GasMode,
@@ -133,12 +134,26 @@ async function resolveSessionGasMode(
       if (token !== null) return { mode: "sponsored", allowlistToken: token };
     }
   }
-  if (policy.allowQusdcGas) return { mode: "qusdc" };
+  // Past onboarding: pay gas in QUSDC, but only if the account can actually do
+  // so right now (armed approval, sufficient QUSDC, fresh QIEDex quote). Don't
+  // submit a doomed op that would waste a bundle and hurt paymaster reputation.
+  if (policy.allowQusdcGas) {
+    try {
+      const [available] = (await publicClient.readContract({
+        address: CONTRACTS.paymaster,
+        abi: PAYMASTER_ABI,
+        functionName: "qusdcGasAvailable",
+        args: [smartAccount, 600_000n * 1_000_000_000n],
+      })) as [boolean, bigint, string];
+      if (available) return { mode: "qusdc" };
+    } catch {
+      /* fall through to other routes / pause */
+    }
+  }
   if (policy.allowNativeQieFallback) return { mode: "self" };
-  // No route available right now. If the policy says to pause, skip this run and
-  // retry later; otherwise fall back to QUSDC-pay as a best effort.
-  if (policy.pauseWhenGasUnavailable) return null;
-  return { mode: "qusdc" };
+  // No route available right now: pause and retry on the next tick rather than
+  // spamming failing ops.
+  return null;
 }
 
 function fallbackSessionGasMode(policy: AgentPolicy): { mode: GasMode } | null {
@@ -404,6 +419,59 @@ export interface CreateIntentParams {
  * a user-facing message if the intent is not permitted by the policy, so a bad
  * intent is rejected at enqueue time rather than failing later on-chain.
  */
+/** Parse a human QUSDC string ("0.0216") into 6-dec units. */
+function parseQusdc(s: string | undefined): bigint {
+  if (s === undefined || s === "") return 0n;
+  const [whole, frac = ""] = s.split(".");
+  const fracPadded = (frac + "000000").slice(0, 6);
+  return BigInt(whole) * 1_000_000n + BigInt(fracPadded || "0");
+}
+
+/**
+ * Agent affordability gate. Confirms the smart account can actually pay for a
+ * scheduled payment: enough QUSDC for the amount, plus the QUSDC gas fee when
+ * the account is past its sponsored onboarding quota. Throws a clear, actionable
+ * error otherwise so the intent is rejected at schedule time, not on-chain.
+ */
+async function assertAffordable(
+  client: ReturnType<typeof createQevieClient>,
+  policy: AgentPolicy,
+  smartAccount: Address,
+  amount: bigint,
+): Promise<void> {
+  const balance = (await getPublicClient().readContract({
+    address: CONTRACTS.qusdc,
+    abi: QUSDC_ABI,
+    functionName: "balanceOf",
+    args: [smartAccount],
+  })) as bigint;
+
+  const decision = await client.gas.resolveGasMode(smartAccount, {
+    allowSponsoredGas: policy.allowSponsoredGas,
+    allowQusdcGas: policy.allowQusdcGas,
+    allowNativeQieFallback: policy.allowNativeQieFallback,
+    pauseWhenGasUnavailable: policy.pauseWhenGasUnavailable,
+  });
+
+  if (decision.mode === "PAUSED") {
+    throw new Error(
+      `No available gas route for this account: ${decision.reasons.join("; ") || "sponsored quota used and QUSDC gas unavailable"}.`,
+    );
+  }
+
+  // Sponsored ops cost the user nothing; QUSDC gas adds the quoted fee.
+  const gasCost = decision.mode === "QUSDC_GAS" ? parseQusdc(decision.estimatedQusdcGas) : 0n;
+  const required = amount + gasCost;
+
+  if (balance < required) {
+    const fmt = (v: bigint): string => formatQusdc(v);
+    const gasNote = gasCost > 0n ? ` (payment ${fmt(amount)} + gas ${fmt(gasCost)})` : "";
+    throw new Error(
+      `Insufficient QUSDC: this account holds ${fmt(balance)} but the scheduled payment needs ${fmt(required)}${gasNote}. Add QUSDC to continue.`,
+    );
+  }
+}
+
 export async function createValidatedIntent(params: CreateIntentParams): Promise<AutopilotIntent> {
   const client = createQevieClient({
     chainId: CHAIN_ID,
@@ -454,6 +522,12 @@ export async function createValidatedIntent(params: CreateIntentParams): Promise
       "This policy's session key is not managed by the service, so it cannot be automated here.",
     );
   }
+
+  // Agent gas-and-funds check: a scheduled payment must be affordable. The
+  // account needs enough QUSDC for the payment itself, plus the QUSDC gas fee
+  // once the sponsored onboarding quota is used up (Qevie is a USDC paymaster —
+  // after onboarding the user pays gas in QUSDC, there is no free gas).
+  await assertAffordable(client, policy, params.smartAccount, params.amount);
 
   return addIntent({
     policyId: params.policyId,

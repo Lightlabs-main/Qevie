@@ -1,6 +1,8 @@
 # qevie
 
-Gasless stablecoin payments on QIE using ERC-4337 smart accounts, QUSDC, a Qevie paymaster, and a bundled mobile-first PWA.
+Gas-abstracted stablecoin payments on QIE using ERC-4337 smart accounts, QUSDC, a Qevie paymaster, and a bundled mobile-first PWA.
+
+Qevie does not make gas disappear — it abstracts it. The first 3 actions per account are sponsored for onboarding; after that you pay the network fee in QUSDC (see [Sustainable Gas Model](#sustainable-gas-model)).
 
 ## What Is Built
 
@@ -19,7 +21,23 @@ Qevie currently includes:
 - mobile PWA frontend
 - VPS deployment with PM2-managed app, bundler, and paymaster services
 
-This is a working gasless stablecoin payment stack, not just a contract repo.
+This is a working gas-abstracted stablecoin payment stack, not just a contract repo.
+
+## Gas Model
+
+Qevie has its own paymaster. Qevie does not claim unlimited free gas:
+
+- The first 3 actions per account are sponsored for onboarding.
+- After that, the user pays the network fee in QUSDC.
+- No QUSDC means no transaction — Qevie is a payment app, so the user simply
+  adds QUSDC to continue.
+
+On testnet the sponsored onboarding tier is enabled. On mainnet Qevie runs as a
+full USDC paymaster: every action pays gas in QUSDC.
+
+Qevie Autopilot follows the same model. Agents check that the account can afford
+the payment plus the QUSDC gas fee before scheduling, and pause instead of
+submitting payments that cannot be funded.
 
 ## Account Model
 

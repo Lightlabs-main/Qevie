@@ -7,6 +7,7 @@ import {
   encodeAbiParameters,
   isAddress,
   keccak256,
+  maxUint256,
   parseAbiParameters,
   toBytes,
   type PublicClient,
@@ -21,6 +22,7 @@ import {
   USERNAME_REGISTRY_ABI,
 } from "./abis.js";
 import { AGENT_POLICY_MANAGER_ABI } from "./agent/abis.js";
+import { GasModule, type AutopilotGasDecision } from "./gas.js";
 import { QevieAccount } from "./account.js";
 import { BundlerClient } from "./bundler.js";
 import { resolveRecipient } from "./resolve.js";
@@ -94,7 +96,10 @@ export class QevieClient {
       input: SessionPaymentInput,
       allowlistToken?: AllowlistToken,
     ) => Promise<UserOpResult>;
+    getAutopilotGasStatus: (policyId: Hex) => Promise<AutopilotGasDecision>;
   };
+  /** Sustainable gas model decision layer (sponsored / QUSDC / native / paused). */
+  readonly gas: GasModule;
 
   constructor(config: QevieClientConfig) {
     this.config = config;
@@ -115,12 +120,28 @@ export class QevieClient {
       getStats: this.getStats.bind(this),
       getRecentReceipts: this.getRecentReceipts.bind(this),
     };
+    this.gas = new GasModule(this.publicClient, this.config.contracts);
     this.agent = {
       createSessionPolicy: this.createSessionPolicy.bind(this),
       listSessionPolicies: this.listSessionPolicies.bind(this),
       getSessionPolicy: this.getSessionPolicy.bind(this),
       executeAutopilotPayment: this.executeAutopilotPayment.bind(this),
+      getAutopilotGasStatus: this.getAutopilotGasStatus.bind(this),
     };
+  }
+
+  /**
+   * Structured gas decision for an Autopilot policy: which mode it would use on
+   * its next run, sponsored quota, and QUSDC-gas estimate. Honest about pause.
+   */
+  async getAutopilotGasStatus(policyId: Hex): Promise<AutopilotGasDecision> {
+    const policy = await this.getSessionPolicy(policyId);
+    return this.gas.resolveGasMode(policy.smartAccount, {
+      allowSponsoredGas: policy.allowSponsoredGas,
+      allowQusdcGas: policy.allowQusdcGas,
+      allowNativeQieFallback: policy.allowNativeQieFallback,
+      pauseWhenGasUnavailable: policy.pauseWhenGasUnavailable,
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -139,6 +160,80 @@ export class QevieClient {
 
   async getSmartAccountAddress(signer: QevieSigner, salt?: bigint): Promise<Address> {
     return this.account(signer, salt).getAddress();
+  }
+
+  /**
+   * Check whether a smart account has approved the paymaster to pull QUSDC for
+   * gas (QUSDC_GAS / Mode A). The paymaster validates this allowance BEFORE an
+   * op executes, so it must be set in advance.
+   */
+  async isQusdcGasReady(smartAccount: Address): Promise<boolean> {
+    const allowance = (await this.publicClient.readContract({
+      address: this.config.contracts.qusdc,
+      abi: QUSDC_ABI,
+      functionName: "allowance",
+      args: [smartAccount, this.config.contracts.paymaster],
+    })) as bigint;
+    // Treat a large remaining allowance as "armed".
+    return allowance >= maxUint256 / 2n;
+  }
+
+  /**
+   * Arm QUSDC_GAS for an account: approve the paymaster to pull QUSDC for gas.
+   *
+   * This is the one-time bootstrap that makes "pay gas in USDC" work. Because
+   * the paymaster checks the allowance during validation (before the op runs),
+   * the approval cannot be self-bootstrapped by the first USDC-gas op — it has
+   * to be set first. On testnet we set it with a sponsored op (free onboarding);
+   * idempotent — a no-op if already armed.
+   *
+   * Returns `{ armed: true }` when the allowance is in place (already or after a
+   * successful op). Returns `{ armed: false, reason }` if no sponsored route is
+   * available to pay for the approval (e.g. mainnet with the free tier off and
+   * the account holding no native QIE) — the caller must surface that.
+   */
+  async ensureQusdcGasReady(
+    signer: QevieSigner,
+  ): Promise<{ armed: boolean; alreadyArmed: boolean; userOpHash?: Hex; reason?: string }> {
+    const acc = this.account(signer);
+    const smartAccount = await acc.getAddress();
+
+    if (await this.isQusdcGasReady(smartAccount)) {
+      return { armed: true, alreadyArmed: true };
+    }
+
+    const approveData = encodeFunctionData({
+      abi: QUSDC_ABI,
+      functionName: "approve",
+      args: [this.config.contracts.paymaster, maxUint256],
+    });
+    const callData = this._encodeExecute(this.config.contracts.qusdc, 0n, approveData);
+
+    // Prefer a sponsored op so the user pays nothing to arm USDC gas (testnet
+    // onboarding). If the account has no sponsored quota, fall back to self-paid.
+    const token = await this.getAllowlistToken(smartAccount);
+    const mode: GasMode = token !== null ? "sponsored" : "self";
+    if (mode === "self") {
+      // Without a sponsored route the account must hold native QIE to arm.
+      // Surface this rather than submitting a doomed op.
+      const bal = await this.publicClient.getBalance({ address: smartAccount });
+      if (bal === 0n) {
+        return {
+          armed: false,
+          alreadyArmed: false,
+          reason: "No sponsored quota and no native QIE to approve the paymaster for USDC gas",
+        };
+      }
+    }
+
+    const userOpHash = await this._submitOpNoWait(acc, callData, mode, token ?? undefined);
+    const result = await this.bundler.waitForUserOp(userOpHash);
+    return {
+      armed: result.status === "mined",
+      alreadyArmed: false,
+      userOpHash,
+      ...(result.status === "mined" ? {} : { reason: "Approval op did not mine" }),
+    };
   }
 
   // ---------------------------------------------------------------------------

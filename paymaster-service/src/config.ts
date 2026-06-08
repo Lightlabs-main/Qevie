@@ -52,4 +52,15 @@ export const RECEIPT_REGISTRY_ADDRESS = process.env["RECEIPT_REGISTRY_ADDRESS"] 
 
 export const CONTRACTS = (CHAIN_ID === 1983 ? TESTNET_CONTRACTS : MAINNET_CONTRACTS) as QevieContracts;
 
+/**
+ * Testnet-only: private key that owns the TestDexPair stub. The stub only
+ * refreshes its price timestamp when `setReserves` is called, so the keeper
+ * pings it periodically to keep the QUSDC_GAS quote fresh (the paymaster
+ * rejects quotes older than its staleness limit). On mainnet a real QIEDex
+ * pool refreshes on every swap, so this is unused. Falls back to the testnet
+ * deployer key if a dedicated key is not provided.
+ */
+export const DEX_REFRESH_PRIVATE_KEY = (): string | undefined =>
+  process.env["DEX_REFRESH_PRIVATE_KEY"] ?? process.env["TESTNET_PRIVATE_KEY"];
+
 export const QIE_DOMAINS_ADDRESS: Address = "0x26cCB3fABd6db18834987134d715Ba2346CE7223";

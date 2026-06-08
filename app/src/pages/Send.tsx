@@ -6,6 +6,8 @@ import type { UserOpResult } from "@qevie/sdk";
 import type { CreateReceiptResult } from "@qevie/sdk";
 import { APP_CONFIG } from "../config.js";
 import { gaslessParams } from "../lib/gasless.js";
+import { useGasStatus } from "../lib/useGasStatus.js";
+import { GasStatusPanel } from "../components/GasStatusPanel.js";
 import { PAYMENT_REQUEST_ABI } from "@qevie/sdk";
 import { hexToString, type Address } from "viem";
 
@@ -32,6 +34,7 @@ export default function Send(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [resolvedAddr, setResolvedAddr] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
+  const gasStatus = useGasStatus(client, signer, address);
 
   useEffect(() => {
     if (requestId === null) return;
@@ -299,10 +302,6 @@ export default function Send(): React.ReactElement {
               <span className="row-value">{memo}</span>
             </div>
           )}
-          <div className="row">
-            <span className="row-label">Gas</span>
-            <span className="chip chip-success" style={{ fontSize: "0.75rem" }}>Paid in QUSDC</span>
-          </div>
           {requestId !== null && (
             <div className="row">
               <span className="row-label">Request</span>
@@ -311,10 +310,20 @@ export default function Send(): React.ReactElement {
           )}
         </div>
 
+        <div className="mb-4">
+          <GasStatusPanel status={gasStatus} />
+        </div>
+
         {error !== null && <div className="alert alert-error mb-3">{error}</div>}
 
-        <button className="btn-primary btn-lg" onClick={() => { void handleSend(); }}>
-          Send ${amountNum.toFixed(2)} QUSDC
+        <button
+          className="btn-primary btn-lg"
+          disabled={gasStatus.uiMode === "NEEDS_QUSDC" || gasStatus.arming}
+          onClick={() => { void handleSend(); }}
+        >
+          {gasStatus.uiMode === "NEEDS_QUSDC"
+            ? "Add USDC to pay network fee"
+            : `Send $${amountNum.toFixed(2)} QUSDC`}
         </button>
       </main>
     );

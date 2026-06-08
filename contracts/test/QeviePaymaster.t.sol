@@ -216,6 +216,130 @@ contract QeviePaymasterTest {
     }
 
     // ---------------------------------------------------------------------------
+    // QUSDC_GAS (Mode A) sustainability config
+    // ---------------------------------------------------------------------------
+
+    function testQusdcGasDefaultConfigIsUnlimited() external {
+        setUp();
+        (bool enabled, uint16 markupBps, uint256 maxPerTx, uint256 dailyCap, uint256 spentToday) =
+            pm.getQusdcGasStatus();
+        require(enabled, "QUSDC gas should default enabled");
+        require(markupBps == 2000, "default markup should be 20%");
+        require(maxPerTx == 0, "per-tx cap should default unlimited");
+        require(dailyCap == 0, "daily cap should default unlimited");
+        require(spentToday == 0, "nothing spent yet");
+    }
+
+    function testModeAFailsWhenQusdcGasDisabled() external {
+        setUp();
+        pm.setQusdcGasEnabled(false);
+
+        address user = address(0xBEEF);
+        token.mint(user, 1000e6);
+        VM.prank(user);
+        token.approve(address(pm), 1000e6);
+        PackedUserOperation memory op = _buildModeAOp(user);
+
+        VM.prank(address(ep));
+        VM.expectRevert();
+        pm.validatePaymasterUserOp(op, bytes32(0), 0.1 ether);
+    }
+
+    function testQusdcGasPerTxCapBlocksHighCharge() external {
+        setUp();
+        // For maxCost 0.1 ether the quote is ~21600 (6-dec). Set a tiny per-tx cap.
+        pm.setQusdcGasCaps(1000, 0);
+
+        address user = address(0xBEEF);
+        token.mint(user, 1000e6);
+        VM.prank(user);
+        token.approve(address(pm), 1000e6);
+        PackedUserOperation memory op = _buildModeAOp(user);
+
+        VM.prank(address(ep));
+        VM.expectRevert();
+        pm.validatePaymasterUserOp(op, bytes32(0), 0.1 ether);
+    }
+
+    function testQusdcGasDailyCapBlocksWhenExceeded() external {
+        setUp();
+        pm.setQusdcGasCaps(0, 1000); // daily cap below a single op's quote
+
+        address user = address(0xBEEF);
+        token.mint(user, 1000e6);
+        VM.prank(user);
+        token.approve(address(pm), 1000e6);
+        PackedUserOperation memory op = _buildModeAOp(user);
+
+        VM.prank(address(ep));
+        VM.expectRevert();
+        pm.validatePaymasterUserOp(op, bytes32(0), 0.1 ether);
+    }
+
+    function testFundedUserAlwaysHasQusdcGasByDefault() external {
+        setUp();
+        address user = address(0xBEEF);
+        token.mint(user, 1000e6);
+        VM.prank(user);
+        token.approve(address(pm), 1000e6);
+
+        (bool available, uint256 quoted, string memory reason) =
+            pm.qusdcGasAvailable(user, 0.1 ether);
+        require(available, "funded user should always be able to pay gas in QUSDC");
+        require(quoted > 0, "quote should be non-zero");
+        require(bytes(reason).length == 0, "no reason when available");
+    }
+
+    function testQusdcGasUnavailableWithoutBalance() external {
+        setUp();
+        address user = address(0xBEEF);
+        (bool available,, string memory reason) = pm.qusdcGasAvailable(user, 0.1 ether);
+        require(!available, "unfunded user has no QUSDC gas");
+        require(bytes(reason).length > 0, "reason should explain why");
+    }
+
+    function testQusdcGasUnavailableWithoutAllowance() external {
+        setUp();
+        address user = address(0xBEEF);
+        token.mint(user, 1000e6); // balance but no approval
+        (bool available,,) = pm.qusdcGasAvailable(user, 0.1 ether);
+        require(!available, "no allowance means QUSDC gas unavailable");
+    }
+
+    function testPostOpRecordsQusdcGasSpent() external {
+        setUp();
+        address user = address(0xBEEF);
+        token.mint(user, 1000e6);
+        VM.prank(user);
+        token.approve(address(pm), 1000e6);
+        PackedUserOperation memory op = _buildModeAOp(user);
+
+        VM.prank(address(ep));
+        (bytes memory ctx,) = pm.validatePaymasterUserOp(op, bytes32(0), 0.1 ether);
+        VM.prank(address(ep));
+        pm.postOp(PostOpMode.opSucceeded, ctx, 0.05 ether, 1 gwei);
+
+        (,,,, uint256 spentToday) = pm.getQusdcGasStatus();
+        require(spentToday > 0, "daily QUSDC gas spend should be tracked");
+        require(spentToday == pm.collectedQUSDC(), "spend tracks collected");
+    }
+
+    function testHigherMarkupRaisesQuote() external {
+        setUp();
+        uint256 baseQuote = pm.quoteQUSDC(0.1 ether);
+        pm.setGasMarkupBps(5000); // 50%
+        uint256 higherQuote = pm.quoteQUSDC(0.1 ether);
+        require(higherQuote > baseQuote, "higher markup should raise the quote");
+    }
+
+    function testNonOwnerCannotSetQusdcGasConfig() external {
+        setUp();
+        VM.prank(address(0xBAD));
+        VM.expectRevert();
+        pm.setQusdcGasEnabled(false);
+    }
+
+    // ---------------------------------------------------------------------------
     // Mode A: stale price guard
     // ---------------------------------------------------------------------------
 

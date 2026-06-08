@@ -48,9 +48,10 @@ contract QeviePaymaster is IPaymaster {
     /// @notice Mode B: sponsor gas from paymaster deposit (free tier).
     uint8 internal constant MODE_SPONSORED = 0x01;
 
-    /// @notice Markup applied on top of DEX spot price in Mode A (20%).
-    uint256 internal constant MARKUP_NUMERATOR = 120;
-    uint256 internal constant MARKUP_DENOMINATOR = 100;
+    /// @notice Default markup applied on top of DEX spot price in Mode A (20% = 2000 bps).
+    uint16 internal constant DEFAULT_GAS_MARKUP_BPS = 2000;
+    /// @notice Basis-points denominator.
+    uint256 internal constant BPS_DENOMINATOR = 10_000;
 
     /// @notice Maximum age of DEX reserve data before we reject quoting (1 hour).
     uint32 internal constant PRICE_STALENESS_LIMIT = 3600;
@@ -143,11 +144,36 @@ contract QeviePaymaster is IPaymaster {
     /// @notice QUSDC collected via Mode A charges (withdrawable by owner).
     uint256 public collectedQUSDC;
 
+    // --- Mode B (QUSDC_GAS) sustainability config ---------------------------
+
+    /// @notice Master switch for Mode A / QUSDC_GAS. When false the paymaster
+    ///         will not front gas against QUSDC and the off-chain layer must
+    ///         surface QUSDC Gas as unavailable.
+    bool public qusdcGasEnabled;
+
+    /// @notice Markup (basis points) added on top of the DEX spot price when
+    ///         pricing native QIE gas in QUSDC. Owner-tunable; default 2000 (20%).
+    uint16 public gasMarkupBps;
+
+    /// @notice Maximum QUSDC (6-dec) chargeable for a single op's gas. 0 = unlimited.
+    uint256 public maxQusdcGasPerTx;
+
+    /// @notice Maximum QUSDC (6-dec) chargeable for gas across all accounts per
+    ///         calendar day. 0 = unlimited.
+    uint256 public dailyQusdcGasCap;
+
+    /// @notice Calendar day (block.timestamp / 86400) for the QUSDC-gas daily cap.
+    uint256 public qusdcGasDay;
+
+    /// @notice QUSDC (6-dec) charged for gas so far today.
+    uint256 public qusdcGasSpentToday;
+
     // ---------------------------------------------------------------------------
     // Events
     // ---------------------------------------------------------------------------
 
     event ModeACharge(address indexed account, uint256 qusdcCharged, uint256 gasCostWei);
+    event QusdcGasConfigUpdated(bool enabled, uint16 markupBps, uint256 maxPerTx, uint256 dailyCap);
     event ModeBSponsored(address indexed account, uint256 gasCostWei, uint256 remainingOps);
     event TargetAllowed(address indexed target, bool allowed);
     event TrustedSignerUpdated(address indexed previous, address indexed next);
@@ -167,6 +193,9 @@ contract QeviePaymaster is IPaymaster {
     error InvalidMode();
     error InsufficientQUSDCBalance(uint256 required, uint256 available);
     error InsufficientQUSDCAllowance(uint256 required, uint256 approved);
+    error QusdcGasDisabled();
+    error QusdcChargeAboveCap(uint256 quoted, uint256 cap);
+    error DailyQusdcGasCapExceeded();
     error QUSDCTransferFailed();
     error AccountCapReached(address account);
     error DailyBudgetExhausted();
@@ -215,6 +244,15 @@ contract QeviePaymaster is IPaymaster {
         owner = msg.sender;
         _reentrancyStatus = _NOT_ENTERED;
         dailyBudgetDay = block.timestamp / 86_400;
+
+        // QUSDC_GAS defaults: enabled, 20% markup, NO per-tx or daily caps.
+        // A funded user (holds QUSDC + has approved the paymaster) can always
+        // pay gas in QUSDC; caps are opt-in safety knobs the owner may set later.
+        qusdcGasEnabled = true;
+        gasMarkupBps = DEFAULT_GAS_MARKUP_BPS;
+        maxQusdcGasPerTx = 0; // 0 == unlimited
+        dailyQusdcGasCap = 0; // 0 == unlimited
+        qusdcGasDay = block.timestamp / 86_400;
     }
 
     // ---------------------------------------------------------------------------
@@ -329,6 +367,31 @@ contract QeviePaymaster is IPaymaster {
         emit TargetAllowed(target, allowed);
     }
 
+    /// @notice Enable or disable QUSDC_GAS (Mode A). When disabled the off-chain
+    ///         layer surfaces QUSDC Gas as unavailable and Autopilot pauses.
+    function setQusdcGasEnabled(bool enabled) external {
+        _requireOwner();
+        qusdcGasEnabled = enabled;
+        emit QusdcGasConfigUpdated(enabled, gasMarkupBps, maxQusdcGasPerTx, dailyQusdcGasCap);
+    }
+
+    /// @notice Set the QUSDC-gas pricing markup in basis points (max 100% = 10000).
+    function setGasMarkupBps(uint16 markupBps) external {
+        _requireOwner();
+        if (markupBps > BPS_DENOMINATOR) revert InvalidPaymasterData();
+        gasMarkupBps = markupBps;
+        emit QusdcGasConfigUpdated(qusdcGasEnabled, markupBps, maxQusdcGasPerTx, dailyQusdcGasCap);
+    }
+
+    /// @notice Set optional QUSDC-gas safety ceilings (0 == unlimited for either).
+    ///         Unlimited by default: a funded user can always pay gas in QUSDC.
+    function setQusdcGasCaps(uint256 perTx, uint256 dailyCap) external {
+        _requireOwner();
+        maxQusdcGasPerTx = perTx;
+        dailyQusdcGasCap = dailyCap;
+        emit QusdcGasConfigUpdated(qusdcGasEnabled, gasMarkupBps, perTx, dailyCap);
+    }
+
     /// @notice Update the trusted signer that issues Mode B allowlist tokens.
     function setTrustedSigner(address next) external {
         _requireOwner();
@@ -377,6 +440,68 @@ contract QeviePaymaster is IPaymaster {
         return PER_ACCOUNT_CAP - used;
     }
 
+    /// @notice Whether a given account can pay gas in QUSDC right now for a
+    ///         worst-case gas cost, and the QUSDC that would be charged.
+    /// @dev Mirrors the Mode A validation gates so the off-chain layer can show
+    ///      an honest "QUSDC Gas available / unavailable" state and a quote.
+    /// @return available True if QUSDC_GAS would pass validation.
+    /// @return quotedQUSDC The QUSDC (6-dec) that would be charged for maxGasCostWei.
+    /// @return reason Empty if available, else a short human-readable reason.
+    function qusdcGasAvailable(address account, uint256 maxGasCostWei)
+        external
+        view
+        returns (bool available, uint256 quotedQUSDC, string memory reason)
+    {
+        if (!qusdcGasEnabled) return (false, 0, "QUSDC Gas is disabled");
+
+        (uint256 reserveWQIE, uint256 reserveQUSDC, uint32 lastUpdate) = _getReserves();
+        if (block.timestamp > uint256(lastUpdate) + PRICE_STALENESS_LIMIT) {
+            return (false, 0, "QIEDex quote is stale");
+        }
+        if (reserveWQIE < MIN_WQIE_RESERVE) {
+            return (false, 0, "QIEDex liquidity too thin");
+        }
+
+        quotedQUSDC = _quoteQUSDC(maxGasCostWei, reserveWQIE, reserveQUSDC);
+
+        if (maxQusdcGasPerTx != 0 && quotedQUSDC > maxQusdcGasPerTx) {
+            return (false, quotedQUSDC, "Gas charge exceeds per-tx cap");
+        }
+        if (dailyQusdcGasCap != 0) {
+            uint256 spentToday =
+                (block.timestamp / 86_400 == qusdcGasDay) ? qusdcGasSpentToday : 0;
+            if (spentToday + quotedQUSDC > dailyQusdcGasCap) {
+                return (false, quotedQUSDC, "Daily QUSDC gas cap reached");
+            }
+        }
+        if (qusdc.balanceOf(account) < quotedQUSDC) {
+            return (false, quotedQUSDC, "Insufficient QUSDC balance");
+        }
+        if (qusdc.allowance(account, address(this)) < quotedQUSDC) {
+            return (false, quotedQUSDC, "QUSDC gas allowance not approved");
+        }
+        return (true, quotedQUSDC, "");
+    }
+
+    /// @notice Return the current QUSDC_GAS configuration and today's usage.
+    function getQusdcGasStatus()
+        external
+        view
+        returns (
+            bool enabled,
+            uint16 markupBps,
+            uint256 maxPerTx,
+            uint256 dailyCap,
+            uint256 spentToday
+        )
+    {
+        enabled = qusdcGasEnabled;
+        markupBps = gasMarkupBps;
+        maxPerTx = maxQusdcGasPerTx;
+        dailyCap = dailyQusdcGasCap;
+        spentToday = (block.timestamp / 86_400 == qusdcGasDay) ? qusdcGasSpentToday : 0;
+    }
+
     // ---------------------------------------------------------------------------
     // Internal — Mode A (QUSDC-pay) validation
     // ---------------------------------------------------------------------------
@@ -386,9 +511,14 @@ contract QeviePaymaster is IPaymaster {
         view
         returns (bytes memory context, uint256 validationData)
     {
+        // QUSDC_GAS must be enabled by the owner.
+        if (!qusdcGasEnabled) {
+            revert QusdcGasDisabled();
+        }
+
         (uint256 reserveWQIE, uint256 reserveQUSDC, uint32 lastUpdate) = _getReserves();
 
-        // Staleness check.
+        // Staleness check — no fresh QIEDex quote, so QUSDC_GAS is unavailable.
         if (block.timestamp > uint256(lastUpdate) + PRICE_STALENESS_LIMIT) {
             return ("", VALIDATION_FAILED);
         }
@@ -399,6 +529,19 @@ contract QeviePaymaster is IPaymaster {
         }
 
         uint256 quotedQUSDC = _quoteQUSDC(maxCost, reserveWQIE, reserveQUSDC);
+
+        // Optional owner-set safety ceilings (0 == unlimited). By default these
+        // are unlimited: a funded user can always pay gas in QUSDC.
+        if (maxQusdcGasPerTx != 0 && quotedQUSDC > maxQusdcGasPerTx) {
+            revert QusdcChargeAboveCap(quotedQUSDC, maxQusdcGasPerTx);
+        }
+        if (dailyQusdcGasCap != 0) {
+            uint256 spentToday =
+                (block.timestamp / 86_400 == qusdcGasDay) ? qusdcGasSpentToday : 0;
+            if (spentToday + quotedQUSDC > dailyQusdcGasCap) {
+                revert DailyQusdcGasCapExceeded();
+            }
+        }
 
         address sender = userOp.sender;
 
@@ -501,6 +644,13 @@ contract QeviePaymaster is IPaymaster {
         if (!ok) revert QUSDCTransferFailed();
 
         collectedQUSDC += actualQUSDC;
+
+        // Track QUSDC charged for gas today (drives the optional daily cap and
+        // off-chain sustainability reporting). The QUSDC collected here is what
+        // the owner rebalances back into native QIE via the QIEDex.
+        _refreshQusdcGasDay();
+        qusdcGasSpentToday += actualQUSDC;
+
         emit ModeACharge(sender, actualQUSDC, actualGasCost);
     }
 
@@ -541,16 +691,18 @@ contract QeviePaymaster is IPaymaster {
     }
 
     /// @dev Convert native QIE (wei) to QUSDC units (6 decimals) at spot + markup.
-    ///      Formula: qusdc = gasCostWei * reserveQUSDC * MARKUP_NUMERATOR
-    ///                         / (reserveWQIE * MARKUP_DENOMINATOR)
+    ///      Formula: qusdc = gasCostWei * reserveQUSDC * (10000 + gasMarkupBps)
+    ///                         / (reserveWQIE * 10000)
+    ///      Prices gas along the QIEDex WQIE/QUSDC route (reserves from the pair).
     ///      Safe because reserveWQIE and reserveQUSDC are verified non-zero by MIN_WQIE_RESERVE check.
     function _quoteQUSDC(uint256 gasCostWei, uint256 reserveWQIE, uint256 reserveQUSDC)
         private
-        pure
+        view
         returns (uint256)
     {
         if (reserveWQIE == 0) return 0;
-        return gasCostWei * reserveQUSDC * MARKUP_NUMERATOR / (reserveWQIE * MARKUP_DENOMINATOR);
+        return gasCostWei * reserveQUSDC * (BPS_DENOMINATOR + gasMarkupBps)
+            / (reserveWQIE * BPS_DENOMINATOR);
     }
 
     // ---------------------------------------------------------------------------
@@ -627,6 +779,14 @@ contract QeviePaymaster is IPaymaster {
         if (today != dailyBudgetDay) {
             dailyBudgetDay = today;
             dailyBudgetSpent = 0;
+        }
+    }
+
+    function _refreshQusdcGasDay() private {
+        uint256 today = block.timestamp / 86_400;
+        if (today != qusdcGasDay) {
+            qusdcGasDay = today;
+            qusdcGasSpentToday = 0;
         }
     }
 

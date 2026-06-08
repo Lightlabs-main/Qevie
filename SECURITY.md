@@ -45,3 +45,36 @@ Privacy limitations:
 - Metadata should be hashed, and private details should remain off-chain.
 
 Qevie Passport is not a zero-knowledge privacy system. Receipt hashes and on-chain receipt events are public. Users can choose to hide amounts and memos from the Qevie UI/export layer, but any data emitted on-chain may be publicly observable. Future versions may support encrypted metadata or ZK/private receipts.
+
+## Paymaster Gas Modes
+
+The Qevie Paymaster is not unlimited free gas.
+
+Sponsored onboarding is capped at 3 eligible transactions per smart account
+(`PER_ACCOUNT_CAP`, a lifetime per-account quota, plus daily/global QIE budgets).
+It cannot be reset by reconnecting a wallet, only sponsors calls to whitelisted
+Qevie targets, and is intended only to bootstrap a new account.
+
+After the onboarding quota, users pay gas in QUSDC. QUSDC_GAS mode pays native
+QIE gas from the paymaster's EntryPoint deposit and recovers the cost in QUSDC.
+It requires, and the paymaster validates before fronting gas:
+
+- a verified QIEDex WQIE/QUSDC pricing route, with a freshness (staleness) check
+  and a minimum-liquidity check to reject thin/manipulable pools;
+- the user holds enough QUSDC and has approved the paymaster (`transferFrom`
+  allowance), checked at validation time before the op executes;
+- optional owner-set safety ceilings: `maxQusdcGasPerTx` and `dailyQusdcGasCap`
+  (both default to unlimited — a funded user can always pay gas in QUSDC);
+- a pricing markup (`gasMarkupBps`, default 20%) so the paymaster does not lose
+  value to short-term price movement;
+- an owner pause switch (`pause()`) and a QUSDC_GAS master switch
+  (`qusdcGasEnabled`).
+
+Because the QUSDC approval must exist before the first QUSDC_GAS op (the
+allowance is checked during validation, before execution), Qevie arms the
+approval with a sponsored op during onboarding. On mainnet, where there is no
+sponsored tier, accounts must approve the paymaster as part of setup.
+
+Autopilot must pause when no valid gas route exists, and agents verify the
+account can afford the payment plus the QUSDC gas fee before scheduling, rather
+than submitting failing UserOperations.

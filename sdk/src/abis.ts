@@ -454,4 +454,38 @@ export const PAYMASTER_ABI = [
     outputs: [{ type: "uint256" }],
     stateMutability: "view",
   },
+  {
+    type: "function",
+    name: "qusdcGasAvailable",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "maxGasCostWei", type: "uint256" },
+    ],
+    outputs: [
+      { name: "available", type: "bool" },
+      { name: "quotedQUSDC", type: "uint256" },
+      { name: "reason", type: "string" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getQusdcGasStatus",
+    inputs: [],
+    outputs: [
+      { name: "enabled", type: "bool" },
+      { name: "markupBps", type: "uint16" },
+      { name: "maxPerTx", type: "uint256" },
+      { name: "dailyCap", type: "uint256" },
+      { name: "spentToday", type: "uint256" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "PER_ACCOUNT_CAP",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+    stateMutability: "view",
+  },
 ] as const;

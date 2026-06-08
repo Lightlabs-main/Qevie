@@ -14,6 +14,17 @@ export { qieMainnet, qieTestnet } from "./chains.js";
 export { TESTNET_CONTRACTS, MAINNET_CONTRACTS } from "./contracts.js";
 export type { QevieContracts } from "./contracts.js";
 
+// Sustainable gas model
+export { GasModule, toBuilderGasMode, DEFAULT_MAX_GAS_COST_WEI } from "./gas.js";
+export type {
+  QevieGasMode,
+  SponsoredStatus,
+  QusdcGasQuote,
+  GasModeOption,
+  GasPolicyPrefs,
+  AutopilotGasDecision,
+} from "./gas.js";
+
 // Payment links / QR
 export { buildPaymentUri, parsePaymentUri, buildShareUrl } from "./links.js";
 
