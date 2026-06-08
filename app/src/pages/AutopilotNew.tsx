@@ -5,15 +5,20 @@ import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import { APP_CONFIG } from "../config.js";
 import { gaslessParams } from "../lib/gasless.js";
+import { provisionSessionKey } from "../lib/sessionKeys.js";
 
 type GasFallback = "sponsored-qusdc" | "sponsored-pause" | "native";
 
 export default function AutopilotNew(): React.ReactElement {
   const client = useQevieClient();
-  const { signer, address } = useWallet();
+  const { signer, address, signerAddress } = useWallet();
   const configured = APP_CONFIG.agentPolicyManager !== undefined;
   const executionEnabled = APP_CONFIG.autopilotExecutionEnabled;
   const [gasFallback, setGasFallback] = useState<GasFallback>("sponsored-qusdc");
+  // Advanced (technical) mode lets a user bring their own session key + guardian.
+  // Default mode provisions the session key server-side and uses the connected
+  // wallet as the guardian, so non-technical users never handle a key.
+  const [advanced, setAdvanced] = useState(false);
   const [sessionKey, setSessionKey] = useState("");
   const [guardian, setGuardian] = useState("");
   const [recipients, setRecipients] = useState("");
@@ -42,8 +47,19 @@ export default function AutopilotNew(): React.ReactElement {
     setSubmitting(true);
     setError(null);
     try {
-      if (!isAddress(sessionKey) || !isAddress(guardian)) {
-        throw new Error("Session key and guardian must be valid addresses.");
+      let resolvedSessionKey: Address;
+      let resolvedGuardian: Address;
+      if (advanced) {
+        if (!isAddress(sessionKey) || !isAddress(guardian)) {
+          throw new Error("Session key and guardian must be valid addresses.");
+        }
+        resolvedSessionKey = sessionKey;
+        resolvedGuardian = guardian;
+      } else {
+        // Server mints and custodies the session key; the connected wallet is
+        // the guardian so the user can revoke Autopilot from their own wallet.
+        resolvedSessionKey = await provisionSessionKey(address);
+        resolvedGuardian = signerAddress ?? address;
       }
       const recipientList = recipients
         .split(",")
@@ -65,8 +81,8 @@ export default function AutopilotNew(): React.ReactElement {
 
       const gas = await gaslessParams(client, address);
       const result = await client.agent.createSessionPolicy(signer, {
-        sessionKey: sessionKey as Address,
-        guardian: guardian as Address,
+        sessionKey: resolvedSessionKey,
+        guardian: resolvedGuardian,
         recipients: recipientList as Address[],
         maxPerTx: parseUnits(maxPerTx, 6),
         dailyLimit: parseUnits(dailyLimit, 6),
@@ -128,13 +144,17 @@ export default function AutopilotNew(): React.ReactElement {
       </div>
 
       <div className="alert alert-info">
-        Session keys can spend only inside this policy. Expiry and finite limits are required.
-        The guardian can revoke the policy on-chain.
+        Autopilot can spend only inside this policy — finite limits and an expiry are required.
+        You can revoke it anytime from your wallet.
       </div>
 
       <div className="tight-stack">
-        <Field label="Session key address" value={sessionKey} onChange={setSessionKey} placeholder="0x..." />
-        <Field label="Guardian address" value={guardian} onChange={setGuardian} placeholder="0x..." />
+        {advanced && (
+          <>
+            <Field label="Session key address" value={sessionKey} onChange={setSessionKey} placeholder="0x..." />
+            <Field label="Guardian address" value={guardian} onChange={setGuardian} placeholder="0x..." />
+          </>
+        )}
         <Field label="Allowed recipients" value={recipients} onChange={setRecipients} placeholder="0x..., 0x..." />
 
         <div className="input-group">
@@ -172,6 +192,12 @@ export default function AutopilotNew(): React.ReactElement {
             <Field label="Daily gas cap" value={dailyGas} onChange={setDailyGas} suffix="QUSDC" type="number" />
           </div>
         </section>
+
+        <Check
+          label="Advanced: bring your own session key + guardian"
+          checked={advanced}
+          onChange={setAdvanced}
+        />
 
         {!configured ? (
           <div className="alert alert-error">AgentPolicyManager is not configured for this chain.</div>

@@ -3,16 +3,19 @@
  *
  * Provides:
  *   POST /allowlist-token    Issue a Mode B sponsorship token (Sybil-gated)
+ *   POST /session-key        Provision a server-custodied Autopilot session key
  *   GET  /health             Health check
  *
  * Also runs the subscription keeper loop.
  */
 
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
+import { isAddress } from "viem";
 import { issueAllowlistToken } from "./allowlist.js";
 import { startKeeper } from "./keeper.js";
 import { PORT } from "./config.js";
 import { issueReceipt } from "./receipts.js";
+import { provisionSessionKey } from "./session-keys.js";
 
 async function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -58,6 +61,27 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
     } catch (e) {
       console.error("[api] /allowlist-token error:", e);
       json(res, 500, { error: "Internal error" });
+    }
+    return;
+  }
+
+  if (req.url === "/session-key" && req.method === "POST") {
+    try {
+      const raw = await readBody(req);
+      const body = JSON.parse(raw) as { smartAccount?: string };
+      if (typeof body.smartAccount !== "string" || !isAddress(body.smartAccount)) {
+        json(res, 400, { error: "valid smartAccount address required" });
+        return;
+      }
+      const sessionKey = provisionSessionKey(body.smartAccount);
+      json(res, 200, { sessionKey });
+    } catch (e) {
+      // Most likely cause: SESSION_KEY_ENC_SECRET is not configured.
+      console.error("[api] /session-key error:", e);
+      const message = e instanceof Error && /SESSION_KEY_ENC_SECRET/.test(e.message)
+        ? "Session key service is not configured on this deployment."
+        : "Internal error";
+      json(res, 503, { error: message });
     }
     return;
   }

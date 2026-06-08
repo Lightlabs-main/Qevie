@@ -26,6 +26,16 @@ export const PORT = Number(optionalEnv("PORT", "3001"));
 
 /** Private key for the paymaster-service signer (used for allowlist token signing). */
 export const SIGNER_PRIVATE_KEY = (): string => requireEnv("PAYMASTER_SIGNER_PRIVATE_KEY");
+
+/**
+ * Secret used to encrypt Autopilot session private keys at rest (AES-256-GCM).
+ * Required for /session-key provisioning; without it the endpoint fails closed
+ * so plaintext keys are never written to disk.
+ */
+export const SESSION_KEY_ENC_SECRET = (): string => requireEnv("SESSION_KEY_ENC_SECRET");
+/** File path for the encrypted session-key store. */
+export const SESSION_KEY_STORE_PATH = (): string =>
+  optionalEnv("SESSION_KEY_STORE_PATH", "./data/session-keys.json");
 export const RECEIPT_ISSUER_PRIVATE_KEY = (): string =>
   process.env["RECEIPT_ISSUER_PRIVATE_KEY"] ?? SIGNER_PRIVATE_KEY();
 export const RECEIPT_REGISTRY_ADDRESS = process.env["RECEIPT_REGISTRY_ADDRESS"] as Address | undefined;

@@ -15,3 +15,7 @@ contracts/lib/
 .DS_Store
 *.log
 .venv-voltaire
+
+# Server-custodied Autopilot session keys (encrypted, but never commit)
+data/
+session-keys.json
