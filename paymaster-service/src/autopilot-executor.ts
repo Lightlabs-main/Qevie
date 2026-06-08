@@ -49,6 +49,21 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyPublicClient = ReturnType<typeof createPublicClient<any, any, any>>;
 
+// The policy's allowed recipients live in a separate on-chain mapping, not in
+// the getPolicy() struct, so membership must be checked via this view.
+const IS_RECIPIENT_ALLOWED_ABI = [
+  {
+    type: "function",
+    name: "isRecipientAllowed",
+    stateMutability: "view",
+    inputs: [
+      { name: "policyId", type: "bytes32" },
+      { name: "recipient", type: "address" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
+] as const;
+
 function sessionSignerFromKey(privateKey: Hex): QevieSigner {
   const account = privateKeyToAccount(privateKey);
   return {
@@ -326,8 +341,17 @@ export async function createValidatedIntent(params: CreateIntentParams): Promise
   if (params.amount <= 0n || params.amount > policy.maxPerTx) {
     throw new Error("Amount must be greater than zero and within the policy's max-per-tx limit.");
   }
-  const allowed = (policy.recipients ?? []).map((r) => r.toLowerCase());
-  if (!allowed.includes(params.recipient.toLowerCase())) {
+  const manager = CONTRACTS.agentPolicyManager;
+  if (manager === undefined) {
+    throw new Error("AgentPolicyManager is not configured for this chain.");
+  }
+  const recipientAllowed = await getPublicClient().readContract({
+    address: manager,
+    abi: IS_RECIPIENT_ALLOWED_ABI,
+    functionName: "isRecipientAllowed",
+    args: [params.policyId, params.recipient],
+  }) as boolean;
+  if (!recipientAllowed) {
     throw new Error("Recipient is not allowed by this policy.");
   }
   if (getSessionPrivateKey(policy.sessionKey) === null) {
