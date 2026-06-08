@@ -56,7 +56,7 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
 -> Phase 6 Mainnet deploy + verify -> Phase 7 Ship.
 
 ## Status / Handoff (keep current)
-- Current phase: Autopilot policy creation operational on QIE testnet — compatible factory deployed, owner/session signature envelopes implemented, policy form submits real UserOperations, policies are read on-chain, bundler receipts resolve through bounded log scans, and paymaster sponsorship is again the default path
+- Current phase: Testnet gas-mode UX rollout — live sponsored-onboarding, QUSDC-gas, and add-QUSDC states are shown across wallet and payment flows
 - 4337 vs relayer decision: ERC-4337 via Voltaire unsafe/no-trace bundler (direct handleOps smoke test confirmed on testnet)
 - Verified addresses: see VERIFICATION.md
 - Open blockers: 
@@ -66,9 +66,9 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
   - Session-key execution is implemented in contracts and SDK but still needs a live autonomous payment smoke test through the running bundler
 - What is built and tested:
   - Contracts: QevieSmartAccount, Factory, QeviePaymaster (Mode A + B), BatchPayments, 
-    PaymentRequest, SubscriptionManager, UsernameRegistry, ReceiptRegistry, AgentPolicyManager, and session-key execution path — Foundry suite passing locally and on VPS (62 tests)
+    PaymentRequest, SubscriptionManager, UsernameRegistry, ReceiptRegistry, AgentPolicyManager, and session-key execution path — Foundry suite passing locally (72 tests)
   - SDK: @qevie/sdk core + React hooks + receipt/passport and Autopilot policy/session methods — builds ESM+CJS, typechecks clean, tests passing
-  - App: React PWA with payment, Passport, and Autopilot pages; policy creation and listing are live on testnet — typecheck, lint, and production build passing
+  - App: React PWA with payment, Passport, and Autopilot pages; policy creation and listing are live on testnet; live gas-status panels cover Send, Batch Pay, Requests, Subscriptions, and Wallet; typecheck, lint, tests, and production build pass
   - paymaster-service: allowlist token API + subscription keeper + receipt issuance endpoint — typechecks clean
   - infra: Voltaire bundler docker-compose (unsafe mode)
   - Live bundler: receipt lookup fixed with two recent 10,000-block log ranges; fresh receipt and policy creation probes passed on 2026-06-08
@@ -79,5 +79,5 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
 - Next action: 
   1. Run a live session-key autonomous payment through the running bundler
   2. Implement Autopilot service agents, audit logs, and gas decision flow
-  3. Add explicit gas-mode UX to current payment confirmation flows
-  4. Deploy and verify the full Autopilot stack on mainnet 1990
+  3. Verify the gas-mode UX against live sponsored and QUSDC-funded operations
+  4. Carefully deploy and verify the full stack on mainnet 1990

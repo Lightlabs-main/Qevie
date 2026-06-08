@@ -5,6 +5,8 @@ import type { UserOpResult } from "@qevie/sdk";
 import type { CreateReceiptResult } from "@qevie/sdk";
 import { APP_CONFIG } from "../config.js";
 import { gaslessParams } from "../lib/gasless.js";
+import { useGasStatus } from "../lib/useGasStatus.js";
+import { GasStatusPanel } from "../components/GasStatusPanel.js";
 
 const EXPLORER = APP_CONFIG.chainId === 1990
   ? "https://mainnet.qie.digital"
@@ -15,6 +17,7 @@ interface Row { to: string; amount: string; }
 export default function BatchPay(): React.ReactElement {
   const client = useQevieClient();
   const { signer, address } = useWallet();
+  const gasStatus = useGasStatus(client, signer, address);
 
   const [rows, setRows] = useState<Row[]>([{ to: "", amount: "" }]);
   const [memo, setMemo] = useState("");
@@ -134,9 +137,22 @@ export default function BatchPay(): React.ReactElement {
         <span style={{ fontWeight: 800, fontSize: "1.25rem", color: "var(--accent-light)" }}>${total.toFixed(2)}</span>
       </div>
 
+      <div className="mb-4">
+        <GasStatusPanel status={gasStatus} />
+      </div>
+
       {error !== null && <div className="alert alert-error mb-3">{error}</div>}
 
-      <button className="btn-primary btn-lg" onClick={() => { void handleSend(); }} disabled={loading || validRows.length === 0}>
+      <button
+        className="btn-primary btn-lg"
+        onClick={() => { void handleSend(); }}
+        disabled={
+          loading ||
+          validRows.length === 0 ||
+          gasStatus.uiMode === "NEEDS_QUSDC" ||
+          gasStatus.arming
+        }
+      >
         {loading ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Sending…</> : `Send to ${validRows.length || 0} recipient${validRows.length === 1 ? "" : "s"}`}
       </button>
     </main>

@@ -4,6 +4,8 @@ import { useQevieClient } from "@qevie/sdk/react";
 import { QUSDC_ABI } from "@qevie/sdk";
 import { useWallet } from "../hooks/useWallet.js";
 import { APP_CONFIG } from "../config.js";
+import { useGasStatus } from "../lib/useGasStatus.js";
+import { GasStatusPanel } from "../components/GasStatusPanel.js";
 
 const FAUCET_QUSDC = 100_000_000n; // 100 QUSDC (6 decimals)
 const QIE_TOPUP = 500_000_000_000_000_000n; // 0.5 QIE for the smart account's own gas
@@ -67,7 +69,8 @@ function describeProviderError(error: unknown): string {
 
 export default function Dashboard(): React.ReactElement {
   const client = useQevieClient();
-  const { address, signerAddress, disconnect } = useWallet();
+  const { address, signer, signerAddress, disconnect } = useWallet();
+  const gasStatus = useGasStatus(client, signer, address);
 
   const [walletQie, setWalletQie] = useState<bigint | null>(null);
   const [walletQusdc, setWalletQusdc] = useState<bigint | null>(null);
@@ -268,6 +271,10 @@ export default function Dashboard(): React.ReactElement {
         </div>
       </div>
 
+      <div style={{ marginBottom: "1rem" }}>
+        <GasStatusPanel status={gasStatus} />
+      </div>
+
       {/* Signer (owner EOA) */}
       <div className="card" style={{ marginBottom: "1rem" }}>
         <div className="flex-between">
@@ -337,15 +344,11 @@ export default function Dashboard(): React.ReactElement {
         </div>
       )}
 
-      {/* Network + gas */}
+      {/* Network */}
       <div className="card" style={{ marginBottom: "1.5rem", display: "grid", gap: "0.6rem" }}>
         <div className="flex-between">
           <span className="text-muted" style={{ fontSize: "0.8rem" }}>Network</span>
           <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>{APP_CONFIG.chainId === 1990 ? "QIE Mainnet" : "QIE Testnet"}</span>
-        </div>
-        <div className="flex-between">
-          <span className="text-muted" style={{ fontSize: "0.8rem" }}>Gas</span>
-          <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>Sponsored · 3 free</span>
         </div>
       </div>
 

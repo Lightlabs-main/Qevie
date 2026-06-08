@@ -6,12 +6,16 @@ import { APP_CONFIG } from "../config.js";
 import { QRCodeSVG } from "qrcode.react";
 import { decodeEventLog } from "viem";
 import { PAYMENT_REQUEST_ABI } from "@qevie/sdk";
+import { gaslessParams } from "../lib/gasless.js";
+import { useGasStatus } from "../lib/useGasStatus.js";
+import { GasStatusPanel } from "../components/GasStatusPanel.js";
 
 type Step = "form" | "created";
 
 export default function Request(): React.ReactElement {
   const client = useQevieClient();
   const { address, signer } = useWallet();
+  const gasStatus = useGasStatus(client, signer, address);
 
   const [from, setFrom] = useState("");
   const [amount, setAmount] = useState("");
@@ -29,11 +33,13 @@ export default function Request(): React.ReactElement {
 
     try {
       const amountUnits = BigInt(Math.round(Number(amount) * 1e6));
+      const gas = await gaslessParams(client, address);
       const result = await client.requestPayment(signer, {
         from: from.trim() || undefined,
         amount: amountUnits,
         memo: memo.trim() || undefined,
         expirySeconds: 86400 * 30,
+        ...gas,
       });
 
       const uri = buildPaymentUri({
@@ -135,9 +141,15 @@ export default function Request(): React.ReactElement {
           <input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="What for?" maxLength={31} />
         </div>
         {error !== null && <p className="text-error">{error}</p>}
+        <GasStatusPanel status={gasStatus} />
         <button
           onClick={() => { void handleCreate(); }}
-          disabled={!amount.trim() || isLoading}
+          disabled={
+            !amount.trim() ||
+            isLoading ||
+            gasStatus.uiMode === "NEEDS_QUSDC" ||
+            gasStatus.arming
+          }
           style={{ width: "100%" }}
         >
           {isLoading ? <span className="spinner" /> : "Create request"}

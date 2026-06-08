@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { formatUnits, isAddress, parseUnits, type Address, type Hex } from "viem";
+import { formatUnits, isAddress, parseUnits, type Address } from "viem";
 import type { AgentPolicy } from "@qevie/sdk";
 import { useQevieClient } from "@qevie/sdk/react";
 import { APP_CONFIG } from "../config.js";

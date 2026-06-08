@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import { gaslessParams } from "../lib/gasless.js";
+import { useGasStatus } from "../lib/useGasStatus.js";
+import { GasStatusPanel } from "../components/GasStatusPanel.js";
 
 const PERIOD_PRESETS = [
   { label: "Daily", days: 1 },
@@ -12,6 +14,7 @@ const PERIOD_PRESETS = [
 export default function Subscriptions(): React.ReactElement {
   const client = useQevieClient();
   const { signer, address } = useWallet();
+  const gasStatus = useGasStatus(client, signer, address);
 
   const [payee, setPayee] = useState("");
   const [amount, setAmount] = useState("");
@@ -106,7 +109,20 @@ export default function Subscriptions(): React.ReactElement {
 
         {error !== null && <div className="alert alert-error">{error}</div>}
 
-        <button className="btn-primary btn-lg" onClick={() => { void handleSubscribe(); }} disabled={!payee.trim() || !amount.trim() || loading} style={{ marginTop: "0.5rem" }}>
+        <GasStatusPanel status={gasStatus} />
+
+        <button
+          className="btn-primary btn-lg"
+          onClick={() => { void handleSubscribe(); }}
+          disabled={
+            !payee.trim() ||
+            !amount.trim() ||
+            loading ||
+            gasStatus.uiMode === "NEEDS_QUSDC" ||
+            gasStatus.arming
+          }
+          style={{ marginTop: "0.5rem" }}
+        >
           {loading ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Creating…</> : "Create subscription"}
         </button>
       </div>
