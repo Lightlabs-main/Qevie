@@ -2,20 +2,25 @@
  * qevie paymaster-service
  *
  * Provides:
- *   POST /allowlist-token    Issue a Mode B sponsorship token (Sybil-gated)
- *   POST /session-key        Provision a server-custodied Autopilot session key
- *   GET  /health             Health check
+ *   POST /allowlist-token     Issue a Mode B sponsorship token (Sybil-gated)
+ *   POST /session-key         Provision a server-custodied Autopilot session key
+ *   POST /autopilot/intent    Schedule an Autopilot payment intent
+ *   GET  /autopilot/intents   List Autopilot intents for a smart account
+ *   POST /autopilot/cancel    Cancel a scheduled Autopilot intent
+ *   GET  /health              Health check
  *
- * Also runs the subscription keeper loop.
+ * Also runs the subscription keeper and Autopilot executor loops.
  */
 
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
-import { isAddress } from "viem";
+import { type Address, type Hex, isAddress } from "viem";
 import { issueAllowlistToken } from "./allowlist.js";
 import { startKeeper } from "./keeper.js";
 import { PORT } from "./config.js";
 import { issueReceipt } from "./receipts.js";
 import { provisionSessionKey } from "./session-keys.js";
+import { createValidatedIntent, startAutopilotExecutor } from "./autopilot-executor.js";
+import { cancelIntent, listIntents } from "./autopilot-intents.js";
 
 async function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -86,6 +91,90 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
     return;
   }
 
+  if (req.url === "/autopilot/intent" && req.method === "POST") {
+    try {
+      const raw = await readBody(req);
+      const body = JSON.parse(raw) as {
+        smartAccount?: string;
+        policyId?: string;
+        recipient?: string;
+        amount?: string;
+        intervalSeconds?: number | null;
+        maxRuns?: number;
+        startAt?: number;
+      };
+      if (
+        typeof body.smartAccount !== "string" || !isAddress(body.smartAccount) ||
+        typeof body.recipient !== "string" || !isAddress(body.recipient) ||
+        typeof body.policyId !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(body.policyId) ||
+        typeof body.amount !== "string" || !/^\d+$/.test(body.amount)
+      ) {
+        json(res, 400, { error: "smartAccount, policyId, recipient and amount (base units) are required" });
+        return;
+      }
+      const interval = typeof body.intervalSeconds === "number" && body.intervalSeconds > 0
+        ? Math.floor(body.intervalSeconds)
+        : null;
+      const maxRuns = typeof body.maxRuns === "number" && body.maxRuns >= 1
+        ? Math.floor(body.maxRuns)
+        : 1;
+      const startAt = typeof body.startAt === "number" && body.startAt > 0
+        ? Math.floor(body.startAt)
+        : Math.floor(Date.now() / 1000);
+
+      const intent = await createValidatedIntent({
+        smartAccount: body.smartAccount as Address,
+        policyId: body.policyId as Hex,
+        recipient: body.recipient as Address,
+        amount: BigInt(body.amount),
+        intervalSeconds: interval,
+        maxRuns,
+        startAt,
+      });
+      json(res, 200, { intent });
+    } catch (e) {
+      // createValidatedIntent throws user-facing policy errors → 400.
+      console.error("[api] /autopilot/intent error:", e);
+      json(res, 400, { error: e instanceof Error ? e.message : "Could not schedule payment." });
+    }
+    return;
+  }
+
+  if (req.url?.startsWith("/autopilot/intents") && req.method === "GET") {
+    const url = new URL(req.url, "http://localhost");
+    const smartAccount = url.searchParams.get("smartAccount");
+    if (smartAccount === null || !isAddress(smartAccount)) {
+      json(res, 400, { error: "valid smartAccount query param required" });
+      return;
+    }
+    json(res, 200, { intents: listIntents(smartAccount as Address) });
+    return;
+  }
+
+  if (req.url === "/autopilot/cancel" && req.method === "POST") {
+    try {
+      const raw = await readBody(req);
+      const body = JSON.parse(raw) as { id?: string; smartAccount?: string };
+      if (
+        typeof body.id !== "string" ||
+        typeof body.smartAccount !== "string" || !isAddress(body.smartAccount)
+      ) {
+        json(res, 400, { error: "id and smartAccount required" });
+        return;
+      }
+      const found = cancelIntent(body.id, body.smartAccount as Address);
+      if (!found) {
+        json(res, 404, { error: "Intent not found for this account." });
+        return;
+      }
+      json(res, 200, { ok: true });
+    } catch (e) {
+      console.error("[api] /autopilot/cancel error:", e);
+      json(res, 500, { error: "Internal error" });
+    }
+    return;
+  }
+
   if (req.url === "/receipts" && req.method === "POST") {
     try {
       const raw = await readBody(req);
@@ -138,6 +227,7 @@ server.listen(PORT, () => {
 });
 
 startKeeper();
+startAutopilotExecutor();
 
 process.on("SIGTERM", () => {
   server.close(() => process.exit(0));

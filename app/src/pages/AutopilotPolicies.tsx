@@ -1,25 +1,50 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { formatUnits } from "viem";
+import { formatUnits, isAddress, parseUnits, type Address, type Hex } from "viem";
 import type { AgentPolicy } from "@qevie/sdk";
 import { useQevieClient } from "@qevie/sdk/react";
 import { APP_CONFIG } from "../config.js";
 import { useWallet } from "../hooks/useWallet.js";
+import {
+  cancelIntent,
+  listIntents,
+  scheduleIntent,
+  type AutopilotIntent,
+} from "../lib/autopilotIntents.js";
+
+const FREQUENCY_OPTIONS: { label: string; intervalSeconds: number | null }[] = [
+  { label: "One-time", intervalSeconds: null },
+  { label: "Every day", intervalSeconds: 86_400 },
+  { label: "Every week", intervalSeconds: 604_800 },
+  { label: "Every month", intervalSeconds: 2_592_000 },
+];
 
 export default function AutopilotPolicies(): React.ReactElement {
   const client = useQevieClient();
   const { address } = useWallet();
   const manager = APP_CONFIG.agentPolicyManager;
   const [policies, setPolicies] = useState<AgentPolicy[]>([]);
+  const [intents, setIntents] = useState<AutopilotIntent[]>([]);
   const [loading, setLoading] = useState(manager !== undefined);
   const [error, setError] = useState<string | null>(null);
+
+  const refreshIntents = useCallback(async (): Promise<void> => {
+    if (address === null) return;
+    try {
+      setIntents(await listIntents(address));
+    } catch {
+      /* leave intents as-is; the policies still render */
+    }
+  }, [address]);
 
   useEffect(() => {
     if (manager === undefined || address === null) return;
     let mounted = true;
-    void client.agent.listSessionPolicies(address)
-      .then((items) => {
-        if (mounted) setPolicies(items);
+    void Promise.all([client.agent.listSessionPolicies(address), listIntents(address).catch(() => [])])
+      .then(([items, loadedIntents]) => {
+        if (!mounted) return;
+        setPolicies(items);
+        setIntents(loadedIntents);
       })
       .catch((failure) => {
         if (mounted) setError(failure instanceof Error ? failure.message : "Failed to load policies.");
@@ -66,12 +91,180 @@ export default function AutopilotPolicies(): React.ReactElement {
               <Row label="Total cap" value={`${formatUnits(policy.totalLimit, 6)} QUSDC`} />
               <Row label="Spent total" value={`${formatUnits(policy.spentTotal, 6)} QUSDC`} />
               <Row label="Expires" value={new Date(Number(policy.validUntil) * 1000).toLocaleString()} />
+
+              {policy.active && !policy.guardianRevoked && address !== null && (
+                <ScheduleForm
+                  policy={policy}
+                  smartAccount={address}
+                  onScheduled={() => { void refreshIntents(); }}
+                />
+              )}
             </section>
           ))}
+
+          <IntentsList
+            intents={intents}
+            smartAccount={address}
+            onChanged={() => { void refreshIntents(); }}
+          />
         </div>
       )}
     </main>
   );
+}
+
+function ScheduleForm({
+  policy,
+  smartAccount,
+  onScheduled,
+}: {
+  policy: AgentPolicy;
+  smartAccount: Address;
+  onScheduled(): void;
+}): React.ReactElement {
+  const recipientOptions = policy.recipients ?? [];
+  const [recipient, setRecipient] = useState(recipientOptions[0] ?? "");
+  const [amount, setAmount] = useState("");
+  const [frequency, setFrequency] = useState(0);
+  const [maxRuns, setMaxRuns] = useState("12");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  const submit = async (): Promise<void> => {
+    setBusy(true);
+    setMessage(null);
+    setFailed(false);
+    try {
+      if (!isAddress(recipient)) throw new Error("Choose a valid recipient.");
+      if (amount === "" || Number(amount) <= 0) throw new Error("Enter an amount greater than zero.");
+      const option = FREQUENCY_OPTIONS[frequency] ?? FREQUENCY_OPTIONS[0]!;
+      const recurring = option.intervalSeconds !== null;
+      await scheduleIntent({
+        smartAccount,
+        policyId: policy.policyId,
+        recipient: recipient as Address,
+        amount: parseUnits(amount, 6),
+        intervalSeconds: option.intervalSeconds,
+        maxRuns: recurring ? Math.max(1, Number(maxRuns) || 1) : 1,
+      });
+      setMessage("Payment scheduled.");
+      setAmount("");
+      onScheduled();
+    } catch (e) {
+      setFailed(true);
+      setMessage(e instanceof Error ? e.message : "Could not schedule the payment.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recurring = (FREQUENCY_OPTIONS[frequency]?.intervalSeconds ?? null) !== null;
+
+  return (
+    <div className="surface-card tight-stack">
+      <h3>Schedule a payment</h3>
+      <div className="input-group">
+        <label className="input-label">Recipient</label>
+        {recipientOptions.length > 0 ? (
+          <select value={recipient} onChange={(e) => setRecipient(e.target.value)}>
+            {recipientOptions.map((r) => <option key={r} value={r}>{short(r)}</option>)}
+          </select>
+        ) : (
+          <input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="0x..." />
+        )}
+      </div>
+      <div className="tight-grid">
+        <div className="input-group">
+          <label className="input-label">Amount</label>
+          <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+        </div>
+        <div className="input-group">
+          <label className="input-label">Frequency</label>
+          <select value={frequency} onChange={(e) => setFrequency(Number(e.target.value))}>
+            {FREQUENCY_OPTIONS.map((o, i) => <option key={o.label} value={i}>{o.label}</option>)}
+          </select>
+        </div>
+      </div>
+      {recurring && (
+        <div className="input-group">
+          <label className="input-label">Number of payments</label>
+          <input type="number" value={maxRuns} onChange={(e) => setMaxRuns(e.target.value)} />
+        </div>
+      )}
+      {message !== null && (
+        <div className={failed ? "alert alert-error" : "alert alert-info"}>{message}</div>
+      )}
+      <button className="btn btn-primary" disabled={busy} onClick={() => { void submit(); }}>
+        {busy ? "Scheduling..." : "Schedule"}
+      </button>
+    </div>
+  );
+}
+
+function IntentsList({
+  intents,
+  smartAccount,
+  onChanged,
+}: {
+  intents: AutopilotIntent[];
+  smartAccount: Address | null;
+  onChanged(): void;
+}): React.ReactElement | null {
+  if (intents.length === 0) return null;
+  return (
+    <section className="surface-card tight-stack">
+      <h3>Scheduled payments</h3>
+      {intents.map((intent) => (
+        <div className="autopilot-status-row tight-stack" key={intent.id} style={{ display: "block" }}>
+          <div className="flex-between">
+            <strong>{formatUnits(BigInt(intent.amount), 6)} QUSDC → {short(intent.recipient)}</strong>
+            <span className={statusClass(intent.status)}>{intent.status}</span>
+          </div>
+          <Row label="Schedule" value={scheduleLabel(intent)} />
+          {intent.status === "scheduled" && (
+            <Row label="Next run" value={new Date(intent.nextRunAt * 1000).toLocaleString()} />
+          )}
+          {intent.lastTxHash !== undefined && (
+            <a
+              className="history-link"
+              href={`https://testnet.qie.digital/tx/${intent.lastTxHash}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Latest transaction
+            </a>
+          )}
+          {intent.lastError !== undefined && intent.status !== "scheduled" && (
+            <div className="alert alert-error">{intent.lastError}</div>
+          )}
+          {intent.status === "scheduled" && smartAccount !== null && (
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                void cancelIntent(intent.id, smartAccount).then(onChanged).catch(() => onChanged());
+              }}
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function scheduleLabel(intent: AutopilotIntent): string {
+  if (intent.intervalSeconds === null) return "One-time";
+  const everyDays = Math.round(intent.intervalSeconds / 86_400);
+  const unit = everyDays === 1 ? "day" : everyDays === 7 ? "week" : everyDays === 30 ? "month" : `${everyDays} days`;
+  return `every ${unit} · ${intent.runsCompleted}/${intent.maxRuns} done`;
+}
+
+function statusClass(status: AutopilotIntent["status"]): string {
+  if (status === "completed") return "status-good";
+  if (status === "failed") return "status-warn";
+  return "text-muted";
 }
 
 function Empty({ title, text }: { title: string; text: string }): React.ReactElement {

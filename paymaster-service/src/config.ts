@@ -36,6 +36,16 @@ export const SESSION_KEY_ENC_SECRET = (): string => requireEnv("SESSION_KEY_ENC_
 /** File path for the encrypted session-key store. */
 export const SESSION_KEY_STORE_PATH = (): string =>
   optionalEnv("SESSION_KEY_STORE_PATH", "./data/session-keys.json");
+
+/** Whether the Autopilot executor loop runs (signs due intents unattended). */
+export const AUTOPILOT_EXECUTOR_ENABLED = process.env["AUTOPILOT_EXECUTOR_ENABLED"] !== "false";
+/** Poll interval for the Autopilot executor loop, in milliseconds. */
+export const AUTOPILOT_POLL_INTERVAL_MS = Number(
+  optionalEnv("AUTOPILOT_POLL_INTERVAL_MS", "60000"),
+);
+/** File path for the Autopilot intent store. */
+export const AUTOPILOT_INTENT_STORE_PATH = (): string =>
+  optionalEnv("AUTOPILOT_INTENT_STORE_PATH", "./data/autopilot-intents.json");
 export const RECEIPT_ISSUER_PRIVATE_KEY = (): string =>
   process.env["RECEIPT_ISSUER_PRIVATE_KEY"] ?? SIGNER_PRIVATE_KEY();
 export const RECEIPT_REGISTRY_ADDRESS = process.env["RECEIPT_REGISTRY_ADDRESS"] as Address | undefined;
