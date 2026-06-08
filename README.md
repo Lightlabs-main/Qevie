@@ -2,26 +2,67 @@
 
 Gas-abstracted stablecoin payments on QIE using ERC-4337 smart accounts, QUSDC, a Qevie paymaster, and a bundled mobile-first PWA.
 
-Qevie does not make gas disappear — it abstracts it. The first 3 actions per account are sponsored for onboarding; after that you pay the network fee in QUSDC (see [Sustainable Gas Model](#sustainable-gas-model)).
+Qevie does not make gas disappear — it abstracts it. The first 3 actions per account are sponsored for onboarding; after that you pay the network fee in QUSDC (see [Gas Model](#gas-model)).
+
+---
+
+## ⭐ Core Features
+
+Qevie has two headline features that make stablecoin payments on QIE feel like a
+normal app:
+
+### 1. The Qevie USDC Paymaster
+
+Qevie runs its **own ERC-4337 paymaster**. Users never have to hold native QIE:
+
+- **Sponsored onboarding** — the first 3 actions per smart account are sponsored
+  by Qevie (a strict onboarding quota, not unlimited free gas).
+- **Pay gas in USDC** — after onboarding, the paymaster fronts the native QIE gas
+  and charges the user in **QUSDC**, priced live along the QIEDex WQIE→QUSDC route.
+  The recipient gets the full amount; the sender pays the amount plus a few
+  hundredths of a cent of gas, all in USDC.
+- **Sustainable** — because users pay their own gas in USDC, the model works on
+  mainnet as a **full USDC paymaster** (no sponsored tier) without Qevie
+  subsidising gas forever.
+
+You hold USDC, you transact. No USDC, no transaction — it's a payment app.
+
+### 2. Qevie Autopilot — Agentic Payments
+
+Qevie ships **real, unattended payment agents** (not LLM prompts, **no API key**):
+
+- A user authorises an on-chain **AgentPolicy** (allowed recipients, per-tx /
+  daily / weekly / total caps, expiry, guardian revoke, and a gas policy).
+- Qevie provisions a **server-custodied session key** (AES-256-GCM encrypted at
+  rest) — non-technical users never handle a key.
+- An **unattended executor** signs due payments with that key and settles them
+  on-chain, with no human in the loop per payment.
+- Agents are **funds-aware**: they verify the account can afford the payment plus
+  the USDC gas fee **before scheduling**, and **pause** instead of submitting
+  payments that cannot be funded.
+
+The agents are deterministic and policy-bound — every action is enforced on-chain.
+
+---
 
 ## What Is Built
 
 Qevie currently includes:
 
-- ERC-4337 smart accounts for each user
-- EntryPoint v0.7 flow on QIE testnet
-- Qevie paymaster for sponsored gas
+- ERC-4337 smart accounts for each user (EntryPoint v0.7 on QIE testnet)
+- **Qevie USDC paymaster** — sponsored onboarding then pay-gas-in-USDC
+- **Qevie Autopilot** — server-custodied session keys + unattended executor agent
 - Voltaire bundler wired to the deployed QIE EntryPoint
-- QUSDC send flow
-- batch payments
-- payment requests
+- QUSDC send flow, batch payments, payment requests
 - subscriptions plus a keeper loop
 - username registration and reverse lookup
 - payment links and QR flows
+- ReceiptRegistry + Qevie Passport (portable payment reputation)
 - mobile PWA frontend
+- a TypeScript SDK (`@qevie/sdk`) for QIE builders
 - VPS deployment with PM2-managed app, bundler, and paymaster services
 
-This is a working gas-abstracted stablecoin payment stack, not just a contract repo.
+This is a working, deployed gas-abstracted stablecoin payment stack, not just a contract repo.
 
 ## Gas Model
 
@@ -95,8 +136,10 @@ The profile screen is intended to behave as the receive identity screen.
 The send flow currently supports:
 
 - recipient resolution from address, username, or `.qie` name
-- gasless `QUSDC` transfer through the smart account
-- paymaster-assisted execution
+- `QUSDC` transfer through the smart account
+- a live **gas panel**: sponsored onboarding while quota remains, then the
+  estimated USDC gas fee, then a clear "add USDC" prompt if the user can't pay
+- automatic arming of the USDC-gas approval during onboarding
 - success state with explorer link
 
 ### Payment Links and QR
@@ -146,9 +189,17 @@ Primary contract:
 
 Responsibilities:
 
-- sponsor gas for allowed operations
-- enforce paymaster policy
-- support allowlist-token-based sponsored usage
+- **Mode B (sponsored onboarding)** — sponsor gas for the first 3 ops per account,
+  Sybil-gated by an allowlist token and scoped to whitelisted Qevie targets, with
+  per-account / daily / global budget caps.
+- **Mode A (USDC gas)** — front native QIE gas and charge the user in QUSDC,
+  priced from the QIEDex WQIE/QUSDC pair plus a configurable markup, with a price
+  staleness + minimum-liquidity guard.
+- expose read-only views so the app/agents show an honest gas state:
+  `remainingFreeOps(account)`, `qusdcGasAvailable(account, maxGasCostWei)`,
+  `getQusdcGasStatus()`.
+- owner controls: pause, QUSDC-gas enable/disable, markup, and optional
+  per-tx / daily USDC-gas safety ceilings (default unlimited).
 
 ### SDK
 
@@ -158,13 +209,26 @@ Primary client:
 
 Important methods already implemented:
 
-- `pay()`
-- `batchPay()`
-- `requestPayment()`
-- `subscribe()`
-- `cancelSubscription()`
-- `registerUsername()`
-- recipient `resolve()`
+Payments & identity:
+- `pay()` / `paySubmit()`, `batchPay()`, `requestPayment()` / `payRequest()`
+- `subscribe()` / `cancelSubscription()`
+- `registerUsername()`, recipient `resolve()`
+
+Gas model (`client.gas`):
+- `getSponsoredStatus(smartAccount)` — remaining onboarding quota
+- `quoteQusdcGas(smartAccount)` — whether USDC gas is available + the quote
+- `getGasModeOptions(smartAccount)` / `resolveGasMode(...)`
+- `client.ensureQusdcGasReady(signer)` — arm the one-time paymaster approval so
+  USDC gas works after onboarding
+
+Autopilot (`client.agent`):
+- `createSessionPolicy()`, `listSessionPolicies()`, `getSessionPolicy()`
+- `executeAutopilotPayment()`
+- `getAutopilotGasStatus(policyId)` — structured gas decision for a policy
+
+Receipts & Passport:
+- `receipts.createReceipt()` / `getReceipt()` / `listFor*()`
+- `passport.getPassport()` / `getStats()`
 
 ### Service Layer
 
@@ -178,43 +242,61 @@ Recurring execution worker:
 
 Current service responsibilities:
 
-- allowlist token issuance
-- sponsorship support
-- recurring subscription charging
+- allowlist token issuance (sponsored onboarding)
+- recurring subscription charging (keeper)
+- **Autopilot**: session-key custody, intent scheduling with the affordability
+  check, and the unattended executor that settles agent payments
+  ([`autopilot-executor.ts`](paymaster-service/src/autopilot-executor.ts),
+  [`session-keys.ts`](paymaster-service/src/session-keys.ts))
+- testnet QIEDex price heartbeat so USDC-gas quotes stay fresh
 
-## Agentic Payments Integration Path
+## Qevie Autopilot — Agentic Payments (built)
 
-Qevie is already structurally compatible with agentic payments because it has:
+Autopilot lets a Qevie smart account make automatic (scheduled / recurring) USDC
+payments without the user signing each one, bounded entirely by an on-chain
+policy. There is **no LLM and no API key** — the "agents" are deterministic
+policy-enforcement code.
 
-- a programmable smart account
-- a paymaster
-- a bundler
-- backend execution infrastructure
-- SDK payment primitives
+### How it works
 
-The recommended model is:
+1. **Policy** — the user creates an on-chain `AgentPolicy`
+   ([`AgentPolicyManager.sol`](contracts/src/agent/AgentPolicyManager.sol)) with:
+   allowed recipients, `maxPerTx` / `dailyLimit` / `weeklyLimit` / `totalLimit`,
+   `validAfter` / `validUntil`, a guardian (defaults to the owner wallet, who can
+   revoke), and a **gas policy** (sponsored / QUSDC / pause).
+2. **Session key** — `POST /session-key` mints a keypair whose private key is
+   **encrypted at rest (AES-256-GCM)** and never leaves the service.
+   ([`session-keys.ts`](paymaster-service/src/session-keys.ts))
+3. **Schedule** — `POST /autopilot/intent` enqueues a payment. At this point the
+   **affordability agent** re-checks the policy on-chain and confirms the account
+   can cover the payment **plus the USDC gas fee**, rejecting it up front
+   otherwise.
+4. **Execute** — an unattended poll loop
+   ([`autopilot-executor.ts`](paymaster-service/src/autopilot-executor.ts)) loads
+   due intents, re-validates the policy, picks the gas mode (sponsored while the
+   onboarding quota remains → else USDC gas, else **pause**), signs with the
+   custodied key, and settles on-chain via the SDK.
 
-- the agent proposes
-- the user approves
-- the smart account executes
+### Safety properties
 
-This should be added as a service-layer feature, not as a separate wallet.
+- Every payment is bounded by the on-chain policy caps and the allowed-recipient
+  list — the session key cannot pay anyone else or exceed the caps.
+- The guardian (the owner wallet) can revoke a policy at any time.
+- Agents **pause instead of spamming** failing UserOperations when no gas route or
+  no funds exist.
+- The gas mode used on each run is recorded and shown in the activity list.
 
-Recommended phases:
+### API surface
 
-1. agent-created payment requests
-2. one-off approved agent payments
-3. scoped spending approvals
-4. scheduled or conditional agent execution
-
-Recommended implementation shape:
-
-- intent records in the backend
-- approval UI in the app
-- execution worker in `paymaster-service`
-- reuse of existing SDK methods for on-chain execution
-
-The existing subscription keeper is the correct starting point for future agent execution.
+```txt
+POST /session-key          { smartAccount }            -> { sessionKey }
+POST /autopilot/intent     { smartAccount, policyId,
+                             recipient, amount,
+                             intervalSeconds?, maxRuns?,
+                             startAt? }                 -> intent (or 4xx if unaffordable)
+GET  /autopilot/intents    ?smartAccount=0x..          -> { intents: [...] }
+POST /autopilot/cancel     { id }                       -> { ok }
+```
 
 ## Current Deployment
 
@@ -279,13 +361,18 @@ PM2 process names:
 
 The SDK source of truth is [`sdk/src/contracts.ts`](sdk/src/contracts.ts).
 
-Current QIE testnet addresses:
+Current QIE testnet (chain `1983`) addresses:
 
 - EntryPoint: `0xa07d2Ff33400fbE2c741385cb959D5BCbA041493`
-- Account factory: `0x9E87eBcde02fc7c3729863D7C371030F8101E7CE`
-- Paymaster: `0x1cdD6BC4258F590E0ea2b10E82a8162384d7f5f2`
+- Account factory: `0xF4cB7EB568cca9714aD3A6adCAFAaBFB39eA6E14`
+- **Paymaster: `0x082022A246b899C216Ba9e0ea339c8E7C8a4D0b4`**
+- **AgentPolicyManager: `0x5E0FABf9aD44a21A38775942a1041c55fbAAE89A`**
+- Batch payments: `0xb07fff088D37355EAD2f4226e208DAA32f7b6a19`
+- Payment request: `0x9ee2d86248F3811E6e63d7C7F025E717AAE877aB`
+- Subscription manager: `0x0705e239bF3F8250DADA4aad1051C33C32fb988a`
 - Username registry: `0x82f50077a8cB6988DF4bBB9B8BD9f92F95975bF4`
 - Test QUSDC: `0x850E073f0E7536A03fE22DB0CFBeA08e6DB3e18f`
+- QIEDex pair (WQIE/QUSDC): `0xd94975d051634C4422D84dA9D4D89DC9Fb00DC5F`
 
 ## VPS Operations
 
@@ -352,26 +439,27 @@ pnpm contracts:test
 
 ## Important Files
 
-- [`app/src/pages/Dashboard.tsx`](app/src/pages/Dashboard.tsx)
-- [`app/src/pages/Profile.tsx`](app/src/pages/Profile.tsx)
-- [`app/src/pages/Send.tsx`](app/src/pages/Send.tsx)
-- [`app/src/pages/PaymentLinks.tsx`](app/src/pages/PaymentLinks.tsx)
-- [`sdk/src/client.ts`](sdk/src/client.ts)
-- [`paymaster-service/src/keeper.ts`](paymaster-service/src/keeper.ts)
-- [`contracts/src/account/QevieSmartAccount.sol`](contracts/src/account/QevieSmartAccount.sol)
+- [`app/src/pages/Send.tsx`](app/src/pages/Send.tsx) · [`app/src/lib/gasless.ts`](app/src/lib/gasless.ts) · [`app/src/lib/useGasStatus.ts`](app/src/lib/useGasStatus.ts)
+- [`app/src/pages/AutopilotPolicies.tsx`](app/src/pages/AutopilotPolicies.tsx) · [`app/src/pages/AutopilotNew.tsx`](app/src/pages/AutopilotNew.tsx)
+- [`sdk/src/client.ts`](sdk/src/client.ts) · [`sdk/src/gas.ts`](sdk/src/gas.ts)
+- [`paymaster-service/src/autopilot-executor.ts`](paymaster-service/src/autopilot-executor.ts) · [`paymaster-service/src/session-keys.ts`](paymaster-service/src/session-keys.ts)
 - [`contracts/src/paymaster/QeviePaymaster.sol`](contracts/src/paymaster/QeviePaymaster.sol)
-- [`contracts/src/registry/UsernameRegistry.sol`](contracts/src/registry/UsernameRegistry.sol)
+- [`contracts/src/agent/AgentPolicyManager.sol`](contracts/src/agent/AgentPolicyManager.sol)
+- [`contracts/src/account/QevieSmartAccount.sol`](contracts/src/account/QevieSmartAccount.sol)
 
 ## Status
 
-The current repo and VPS reflect a functioning QIE testnet payment application with:
+The current repo and VPS reflect a functioning, deployed QIE testnet payment
+application with:
 
 - ERC-4337 smart accounts
-- paymaster-sponsored gas
-- QUSDC transfer flows
-- username identity
-- QR and link-based payment flows
-- subscription infrastructure
-- a clearer wallet and profile UX
+- the **Qevie USDC paymaster** — sponsored onboarding then pay-gas-in-USDC
+- **Qevie Autopilot** — server-custodied agents making unattended USDC payments
+- QUSDC transfer, batch, request, and subscription flows
+- username identity, QR and link-based payment flows
+- ReceiptRegistry + Qevie Passport reputation
+- a TypeScript SDK for QIE builders
 
-The next major system extension is agentic payment approvals and execution on top of the existing smart account and service stack.
+Both core features — the USDC paymaster and the Autopilot agents — are live on the
+testnet deployment and verified end-to-end against the deployed bundler,
+paymaster, and executor.
