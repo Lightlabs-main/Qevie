@@ -230,6 +230,12 @@ function IntentsList({
               Submitted to the bundler and waiting for on-chain confirmation.
             </div>
           )}
+          {intent.lastGasMode !== undefined && (
+            <div className="autopilot-status-row" style={{ fontSize: "0.75rem", opacity: 0.85 }}>
+              <span>Gas</span>
+              <span>{intent.lastGasMode === "QUSDC_GAS" ? "Paid in USDC" : "Sponsored onboarding"}</span>
+            </div>
+          )}
           {intent.lastTxHash !== undefined && (
             <a
               className="history-link"

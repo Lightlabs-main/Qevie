@@ -36,6 +36,8 @@ export interface AutopilotIntent {
   lastTxHash?: Hex;
   pendingUserOpHash?: Hex;
   lastError?: string;
+  /** Gas mode used on the most recent run ("sponsored" | "qusdc" | "self"). */
+  lastGasMode?: string;
 }
 
 export interface NewIntent {

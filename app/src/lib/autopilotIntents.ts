@@ -17,6 +17,8 @@ export interface AutopilotIntent {
   lastTxHash?: Hex;
   pendingUserOpHash?: Hex;
   lastError?: string;
+  /** Gas mode used on the most recent run. */
+  lastGasMode?: string;
 }
 
 export interface ScheduleIntentInput {

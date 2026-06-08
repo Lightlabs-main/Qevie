@@ -299,17 +299,23 @@ async function runIntent(
 
   const runsCompleted = intent.runsCompleted + 1;
   const done = intent.intervalSeconds === null || runsCompleted >= intent.maxRuns;
+  const gasModeLabel = finalMode === "sponsored"
+    ? "SPONSORED_ONBOARDING"
+    : finalMode === "qusdc"
+      ? "QUSDC_GAS"
+      : "NATIVE_QIE";
   updateIntent(intent.id, {
     runsCompleted,
     lastTxHash: result.txHash,
     pendingUserOpHash: undefined,
     lastError: undefined,
+    lastGasMode: gasModeLabel,
     status: done ? "completed" : "scheduled",
     nextRunAt: done
       ? intent.nextRunAt
       : intent.nextRunAt + (intent.intervalSeconds as number),
   });
-  console.log(`[autopilot] intent ${intent.id} run ${runsCompleted}/${intent.maxRuns} tx=${result.txHash}`);
+  console.log(`[autopilot] intent ${intent.id} run ${runsCompleted}/${intent.maxRuns} gas=${gasModeLabel} tx=${result.txHash}`);
 
   // Receipts are best-effort: a receipt failure must not undo a settled payment.
   try {
