@@ -225,6 +225,11 @@ function IntentsList({
           {intent.status === "scheduled" && (
             <Row label="Next run" value={new Date(intent.nextRunAt * 1000).toLocaleString()} />
           )}
+          {intent.status === "confirming" && (
+            <div className="alert alert-info">
+              Submitted to the bundler and waiting for on-chain confirmation.
+            </div>
+          )}
           {intent.lastTxHash !== undefined && (
             <a
               className="history-link"
@@ -235,7 +240,7 @@ function IntentsList({
               Latest transaction
             </a>
           )}
-          {intent.lastError !== undefined && intent.status !== "scheduled" && (
+          {intent.lastError !== undefined && intent.status !== "scheduled" && intent.status !== "confirming" && (
             <div className="alert alert-error">{intent.lastError}</div>
           )}
           {intent.status === "scheduled" && smartAccount !== null && (
@@ -264,6 +269,7 @@ function scheduleLabel(intent: AutopilotIntent): string {
 function statusClass(status: AutopilotIntent["status"]): string {
   if (status === "completed") return "status-good";
   if (status === "failed") return "status-warn";
+  if (status === "confirming") return "status-warn";
   return "text-muted";
 }
 

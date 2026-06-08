@@ -205,15 +205,12 @@ export class QevieClient {
     if (mode === "sponsored" && token === null) {
       throw new Error("Sponsored onboarding is unavailable for this smart account.");
     }
-    const op = await account.buildAndSign(
+    const userOpHash = await this._submitOpNoWait(
+      account,
       callData,
       mode,
-      { ...DEFAULT_GAS, callGasLimit: 650_000n },
       token ?? undefined,
-    );
-    const userOpHash = await this.bundler.sendUserOperation(
-      op,
-      this.config.contracts.entryPoint,
+      { ...DEFAULT_GAS, callGasLimit: 650_000n },
     );
 
     if (options.waitForReceipt === false) {
@@ -521,8 +518,7 @@ export class QevieClient {
     // prefer sponsored (gasless) mode; fall back to QUSDC-pay if not eligible.
     const token = await this.getAllowlistToken(smartAccount);
     const mode: GasMode = token !== null ? "sponsored" : "qusdc";
-    const op = await acc.buildAndSign(callData, mode, DEFAULT_GAS, token ?? undefined);
-    const userOpHash = await this.bundler.sendUserOperation(op, this.config.contracts.entryPoint);
+    const userOpHash = await this._submitOpNoWait(acc, callData, mode, token ?? undefined);
 
     // Voltaire on QIE can accept and mine the UserOperation before its receipt
     // indexer returns data. Username registration has a direct on-chain success
@@ -702,8 +698,9 @@ export class QevieClient {
     callData: Hex,
     mode: GasMode,
     allowlistToken?: AllowlistToken,
+    gasConfig = DEFAULT_GAS,
   ): Promise<Hex> {
-    const op = await acc.buildAndSign(callData, mode, DEFAULT_GAS, allowlistToken);
+    const op = await acc.buildAndSign(callData, mode, gasConfig, allowlistToken);
     return this.bundler.sendUserOperation(op, this.config.contracts.entryPoint);
   }
 

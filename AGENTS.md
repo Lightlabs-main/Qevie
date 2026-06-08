@@ -56,7 +56,7 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
 -> Phase 6 Mainnet deploy + verify -> Phase 7 Ship.
 
 ## Status / Handoff (keep current)
-- Current phase: Autopilot policy creation operational on QIE testnet — compatible factory deployed, owner/session signature envelopes implemented, policy form submits real UserOperations, and policies are read on-chain
+- Current phase: Autopilot policy creation operational on QIE testnet — compatible factory deployed, owner/session signature envelopes implemented, policy form submits real UserOperations, policies are read on-chain, bundler receipts resolve through bounded log scans, and paymaster sponsorship is again the default path
 - 4337 vs relayer decision: ERC-4337 via Voltaire unsafe/no-trace bundler (direct handleOps smoke test confirmed on testnet)
 - Verified addresses: see VERIFICATION.md
 - Open blockers: 
@@ -71,6 +71,10 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
   - App: React PWA with payment, Passport, and Autopilot pages; policy creation and listing are live on testnet — typecheck, lint, and production build passing
   - paymaster-service: allowlist token API + subscription keeper + receipt issuance endpoint — typechecks clean
   - infra: Voltaire bundler docker-compose (unsafe mode)
+  - Live bundler: receipt lookup fixed with two recent 10,000-block log ranges; fresh receipt and policy creation probes passed on 2026-06-08
+  - Paymaster-first behavior restored: sponsored mint and sponsored policy creation pass again after a clean bundler restart; SDK no longer auto-demotes to `self`
+  - Autopilot submitted payments now stay in `confirming` until receipt reconciliation, and the activity page no longer shows placeholder `Pending` labels
+  - Paymaster root cause identified locally: Mode B non-signature rejections were returning ERC-4337 `validationData = 1`, which Voltaire classified as `AA34 signature error` and used to ban the paymaster; contract and tests now distinguish real signature failure from policy/budget/target rejects
   - docs: `docs/QEVIE_AUTOPILOT_IMPLEMENTATION_PLAN.md` added with merged Path B + sustainable gas plan
 - Next action: 
   1. Run a live session-key autonomous payment through the running bundler

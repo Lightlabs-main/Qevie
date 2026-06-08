@@ -12,9 +12,10 @@ export interface AutopilotIntent {
   maxRuns: number;
   runsCompleted: number;
   nextRunAt: number;
-  status: "scheduled" | "completed" | "failed" | "cancelled";
+  status: "scheduled" | "confirming" | "completed" | "failed" | "cancelled";
   createdAt: number;
   lastTxHash?: Hex;
+  pendingUserOpHash?: Hex;
   lastError?: string;
 }
 

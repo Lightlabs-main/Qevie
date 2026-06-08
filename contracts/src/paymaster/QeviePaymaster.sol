@@ -235,14 +235,14 @@ contract QeviePaymaster is IPaymaster {
     ) external override returns (bytes memory context, uint256 validationData) {
         _requireEntryPoint();
         if (paused) {
-            return ("", VALIDATION_FAILED);
+            revert IsPaused();
         }
 
         bytes calldata paymasterData = userOp.paymasterAndData;
 
         // paymasterAndData must be at least 53 bytes: 20 addr + 16 gasLimits + ... + 1 mode
         if (paymasterData.length < 53) {
-            return ("", VALIDATION_FAILED);
+            revert InvalidPaymasterData();
         }
 
         uint8 mode = uint8(paymasterData[52]);
@@ -252,7 +252,7 @@ contract QeviePaymaster is IPaymaster {
         } else if (mode == MODE_SPONSORED) {
             return _validateModeB(userOp);
         } else {
-            return ("", VALIDATION_FAILED);
+            revert InvalidMode();
         }
     }
 
@@ -403,9 +403,7 @@ contract QeviePaymaster is IPaymaster {
         address sender = userOp.sender;
 
         // Validate the user's QUSDC balance and allowance cover the worst-case charge.
-        if (!_isCallAllowed(userOp.callData)) {
-            return ("", VALIDATION_FAILED);
-        }
+        _requireCallAllowed(userOp.callData);
 
         uint256 balance = qusdc.balanceOf(sender);
         if (balance < quotedQUSDC) {
@@ -434,7 +432,7 @@ contract QeviePaymaster is IPaymaster {
 
         // Decode expiry + signature (4 + 65 = 69 extra bytes required).
         if (extra.length < 69) {
-            return ("", VALIDATION_FAILED);
+            revert InvalidPaymasterData();
         }
 
         uint32 expiry = uint32(bytes4(extra[0:4]));
@@ -443,10 +441,10 @@ contract QeviePaymaster is IPaymaster {
         // Validate expiry.
         uint256 now_ = block.timestamp;
         if (expiry < now_) {
-            return ("", VALIDATION_FAILED);
+            revert ExpiredAllowlistSig();
         }
         if (expiry > now_ + MAX_EXPIRY_WINDOW) {
-            return ("", VALIDATION_FAILED);
+            revert FutureExpiry();
         }
 
         address sender = userOp.sender;
@@ -461,24 +459,22 @@ contract QeviePaymaster is IPaymaster {
 
         // Check per-account cap.
         if (sponsoredOpsCount[sender] >= PER_ACCOUNT_CAP) {
-            return ("", VALIDATION_FAILED);
+            revert AccountCapReached(sender);
         }
 
         // Check daily budget (reset if new day).
         _refreshDailyBudget();
         if (dailyBudgetSpent >= DAILY_BUDGET_WEI) {
-            return ("", VALIDATION_FAILED);
+            revert DailyBudgetExhausted();
         }
 
         // Check global budget.
         if (globalBudgetSpent >= GLOBAL_BUDGET_WEI) {
-            return ("", VALIDATION_FAILED);
+            revert GlobalBudgetExhausted();
         }
 
         // Scope check: only sponsor calls to whitelisted targets.
-        if (!_isCallAllowed(userOp.callData)) {
-            return ("", VALIDATION_FAILED);
-        }
+        _requireCallAllowed(userOp.callData);
 
         // context: mode byte + sender (to commit in postOp)
         context = abi.encode(MODE_SPONSORED, sender);
@@ -561,62 +557,65 @@ contract QeviePaymaster is IPaymaster {
     // Internal — scope restriction check
     // ---------------------------------------------------------------------------
 
-    /// @dev Return true if all call targets in the userOp callData are whitelisted.
-    function _isCallAllowed(bytes calldata callData) private view returns (bool) {
+    /// @dev Revert unless all call targets in the userOp callData are whitelisted.
+    function _requireCallAllowed(bytes calldata callData) private view {
         if (callData.length < 4) {
-            return allowedTargets[address(0)];
+            if (!allowedTargets[address(0)]) revert DisallowedTarget(address(0));
+            return;
         }
 
         bytes4 sel = bytes4(callData[:4]);
 
         if (sel == EXECUTE_SELECTOR) {
-            if (callData.length < 36) return false;
+            if (callData.length < 36) revert InvalidPaymasterData();
             address target = address(uint160(uint256(bytes32(callData[4:36]))));
-            return allowedTargets[target];
+            if (!allowedTargets[target]) revert DisallowedTarget(target);
+            return;
         }
 
         if (sel == EXECUTE_SESSION_SELECTOR) {
-            if (callData.length < 68) return false;
+            if (callData.length < 68) revert InvalidPaymasterData();
             address target = address(uint160(uint256(bytes32(callData[36:68]))));
-            return allowedTargets[target];
+            if (!allowedTargets[target]) revert DisallowedTarget(target);
+            return;
         }
 
         if (sel == EXECUTE_BATCH_SELECTOR) {
             // Decode targets array from the first ABI array slot.
             // callData = selector(4) + ABI-encoded (address[], uint256[], bytes[])
             // The first param is a dynamic array; its offset is at callData[4:36].
-            if (callData.length < 68) return false;
+            if (callData.length < 68) revert InvalidPaymasterData();
             uint256 targetsOffset = uint256(bytes32(callData[4:36]));
             uint256 base = 4 + targetsOffset;
-            if (callData.length < base + 32) return false;
+            if (callData.length < base + 32) revert InvalidPaymasterData();
             uint256 len = uint256(bytes32(callData[base:base + 32]));
-            if (callData.length < base + 32 + len * 32) return false;
+            if (callData.length < base + 32 + len * 32) revert InvalidPaymasterData();
             for (uint256 i; i < len; ++i) {
                 address t = address(
                     uint160(uint256(bytes32(callData[base + 32 + i * 32:base + 64 + i * 32])))
                 );
-                if (!allowedTargets[t]) return false;
+                if (!allowedTargets[t]) revert DisallowedTarget(t);
             }
-            return true;
+            return;
         }
 
         if (sel == EXECUTE_SESSION_BATCH_SELECTOR) {
-            if (callData.length < 100) return false;
+            if (callData.length < 100) revert InvalidPaymasterData();
             uint256 targetsOffset = uint256(bytes32(callData[36:68]));
             uint256 base = 4 + targetsOffset;
-            if (callData.length < base + 32) return false;
+            if (callData.length < base + 32) revert InvalidPaymasterData();
             uint256 len = uint256(bytes32(callData[base:base + 32]));
-            if (callData.length < base + 32 + len * 32) return false;
+            if (callData.length < base + 32 + len * 32) revert InvalidPaymasterData();
             for (uint256 i; i < len; ++i) {
                 address t = address(
                     uint160(uint256(bytes32(callData[base + 32 + i * 32:base + 64 + i * 32])))
                 );
-                if (!allowedTargets[t]) return false;
+                if (!allowedTargets[t]) revert DisallowedTarget(t);
             }
-            return true;
+            return;
         }
 
-        return false;
+        revert InvalidPaymasterData();
     }
 
     // ---------------------------------------------------------------------------

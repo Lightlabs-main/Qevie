@@ -15,6 +15,10 @@ services:
       - "--verbose"
       - "--unsafe"
       - "--disable_p2p"
+      - "--logs_incremental_range"
+      - "${BUNDLER_LOGS_INCREMENTAL_RANGE:-10000}"
+      - "--logs_number_of_ranges"
+      - "${BUNDLER_LOGS_NUMBER_OF_RANGES:-2}"
     ports:
       - "${BUNDLER_PORT:-4337}:${BUNDLER_PORT:-4337}"
     restart: unless-stopped

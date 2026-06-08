@@ -43,6 +43,7 @@ import {
   type AutopilotIntent,
   addIntent,
   dueIntents,
+  confirmingIntents,
   updateIntent,
 } from "./autopilot-intents.js";
 
@@ -77,6 +78,11 @@ function sessionSignerFromKey(privateKey: Hex): QevieSigner {
 
 function getPublicClient(): AnyPublicClient {
   return createPublicClient({ transport: http(RPC_URL) }) as AnyPublicClient;
+}
+
+function isBannedPaymasterError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /banned paymaster/i.test(error.message) || /RPC error -32504/i.test(error.message);
 }
 
 /**
@@ -135,6 +141,13 @@ async function resolveSessionGasMode(
   return { mode: "qusdc" };
 }
 
+function fallbackSessionGasMode(policy: AgentPolicy): { mode: GasMode } | null {
+  if (policy.allowQusdcGas) return { mode: "qusdc" };
+  if (policy.allowNativeQieFallback) return { mode: "self" };
+  if (policy.pauseWhenGasUnavailable) return null;
+  return { mode: "qusdc" };
+}
+
 function formatQusdc(amount: bigint): string {
   const whole = amount / 1_000_000n;
   const fraction = (amount % 1_000_000n).toString().padStart(6, "0").replace(/0+$/, "");
@@ -183,6 +196,7 @@ async function runIntent(
 
   const signer = sessionSignerFromKey(privateKey);
   let result: UserOpResult;
+  let finalMode = gas.mode;
   try {
     result = await client.agent.executeAutopilotPayment(
       signer,
@@ -191,19 +205,50 @@ async function runIntent(
         policyId: intent.policyId,
         recipient: intent.recipient,
         amount,
-        mode: gas.mode,
+        mode: finalMode,
       },
       gas.allowlistToken,
     );
   } catch (e) {
+    if (gas.mode === "sponsored" && isBannedPaymasterError(e)) {
+      const fallback = fallbackSessionGasMode(policy);
+      if (fallback === null) {
+        updateIntent(intent.id, {
+          lastError: "Sponsored gas is temporarily unavailable; policy is paused until the paymaster recovers.",
+        });
+        console.warn(`[autopilot] intent ${intent.id} paused — sponsored gas banned and no fallback route allowed`);
+        return;
+      }
+      try {
+        finalMode = fallback.mode;
+        result = await client.agent.executeAutopilotPayment(
+          signer,
+          {
+            smartAccount: intent.smartAccount,
+            policyId: intent.policyId,
+            recipient: intent.recipient,
+            amount,
+            mode: finalMode,
+          },
+        );
+      } catch (retryError) {
+        updateIntent(intent.id, {
+          status: "failed",
+          lastError: `Payment submission error — review before rescheduling: ${retryError instanceof Error ? retryError.message : "unknown"}`,
+        });
+        console.error(`[autopilot] intent ${intent.id} fallback submit error:`, retryError);
+        return;
+      }
+    } else {
     // The op may already have been submitted when this threw, so stop the intent
     // rather than let the outer loop retry it and risk a double payment.
-    updateIntent(intent.id, {
-      status: "failed",
-      lastError: `Payment submission error — review before rescheduling: ${e instanceof Error ? e.message : "unknown"}`,
-    });
-    console.error(`[autopilot] intent ${intent.id} submit error:`, e);
-    return;
+      updateIntent(intent.id, {
+        status: "failed",
+        lastError: `Payment submission error — review before rescheduling: ${e instanceof Error ? e.message : "unknown"}`,
+      });
+      console.error(`[autopilot] intent ${intent.id} submit error:`, e);
+      return;
+    }
   }
 
   // The op is already submitted. If the short SDK wait did not confirm it, keep
@@ -216,9 +261,19 @@ async function runIntent(
 
   if (result.status !== "mined" || result.txHash === null) {
     const reverted = result.status === "failed" && result.txHash !== null;
+    if (!reverted) {
+      updateIntent(intent.id, {
+        status: "confirming",
+        pendingUserOpHash: result.userOpHash,
+        lastError: "Payment submitted. Awaiting on-chain confirmation before rescheduling.",
+      });
+      console.log(`[autopilot] intent ${intent.id} awaiting confirmation userOp=${result.userOpHash}`);
+      return;
+    }
     updateIntent(intent.id, {
       status: "failed",
       ...(result.txHash !== null ? { lastTxHash: result.txHash } : {}),
+      pendingUserOpHash: undefined,
       lastError: reverted
         ? "Payment reverted on-chain."
         : `Payment could not be confirmed (userOp ${result.userOpHash}). Stopped to avoid a double payment — review before rescheduling.`,
@@ -232,6 +287,7 @@ async function runIntent(
   updateIntent(intent.id, {
     runsCompleted,
     lastTxHash: result.txHash,
+    pendingUserOpHash: undefined,
     lastError: undefined,
     status: done ? "completed" : "scheduled",
     nextRunAt: done
@@ -266,8 +322,8 @@ async function runIntent(
 
 export async function runAutopilotOnce(): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
+  const confirming = confirmingIntents();
   const due = dueIntents(now);
-  if (due.length === 0) return;
 
   const publicClient = getPublicClient();
   const client = createQevieClient({
@@ -277,6 +333,45 @@ export async function runAutopilotOnce(): Promise<void> {
     paymasterServiceUrl: "",
     contracts: CONTRACTS,
   });
+
+  for (const intent of confirming) {
+    const pendingUserOpHash = intent.pendingUserOpHash;
+    if (pendingUserOpHash === undefined) continue;
+    try {
+      const reconciled = await confirmReceipt(client, pendingUserOpHash, 30_000, 2_000);
+      if (reconciled === null) continue;
+      if (reconciled.status !== "mined" || reconciled.txHash === null) {
+        if (reconciled.status === "failed" && reconciled.txHash !== null) {
+          updateIntent(intent.id, {
+            status: "failed",
+            lastTxHash: reconciled.txHash,
+            pendingUserOpHash: undefined,
+            lastError: "Payment reverted on-chain.",
+          });
+          continue;
+        }
+        continue;
+      }
+
+      const runsCompleted = intent.runsCompleted + 1;
+      const done = intent.intervalSeconds === null || runsCompleted >= intent.maxRuns;
+      updateIntent(intent.id, {
+        runsCompleted,
+        lastTxHash: reconciled.txHash,
+        pendingUserOpHash: undefined,
+        lastError: undefined,
+        status: done ? "completed" : "scheduled",
+        nextRunAt: done
+          ? intent.nextRunAt
+          : intent.nextRunAt + (intent.intervalSeconds as number),
+      });
+      console.log(`[autopilot] intent ${intent.id} confirmed tx=${reconciled.txHash}`);
+    } catch (e) {
+      console.error(`[autopilot] error reconciling intent ${intent.id}:`, e);
+    }
+  }
+
+  if (due.length === 0) return;
 
   for (const intent of due) {
     try {

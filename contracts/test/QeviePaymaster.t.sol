@@ -294,9 +294,8 @@ contract QeviePaymasterTest {
         PackedUserOperation memory op = _buildModeBOp(user, expiry, sig);
 
         VM.prank(address(ep));
-        (, uint256 validData) = pm.validatePaymasterUserOp(op, bytes32(0), 0);
-
-        require(validData == 1, "expired sig should fail");
+        VM.expectRevert();
+        pm.validatePaymasterUserOp(op, bytes32(0), 0);
     }
 
     function testModeBFailsWithWrongSigner() external {
@@ -345,9 +344,8 @@ contract QeviePaymasterTest {
         PackedUserOperation memory op = _buildModeBOp(user, expiry, sig);
 
         VM.prank(address(ep));
-        (, uint256 validData) = pm.validatePaymasterUserOp(op, bytes32(0), 0);
-
-        require(validData == 1, "cap exceeded should fail");
+        VM.expectRevert();
+        pm.validatePaymasterUserOp(op, bytes32(0), 0);
     }
 
     function testModeBFailsWithDisallowedTarget() external {
@@ -361,9 +359,8 @@ contract QeviePaymasterTest {
         PackedUserOperation memory op = _buildModeBOp(user, expiry, sig);
 
         VM.prank(address(ep));
-        (, uint256 validData) = pm.validatePaymasterUserOp(op, bytes32(0), 0);
-
-        require(validData == 1, "disallowed target should fail");
+        VM.expectRevert();
+        pm.validatePaymasterUserOp(op, bytes32(0), 0);
     }
 
     // ---------------------------------------------------------------------------
@@ -410,9 +407,8 @@ contract QeviePaymasterTest {
         PackedUserOperation memory op = _buildModeAOp(user);
 
         VM.prank(address(ep));
-        (, uint256 validData) = pm.validatePaymasterUserOp(op, bytes32(0), 0.1 ether);
-
-        require(validData == 1, "paused should fail");
+        VM.expectRevert();
+        pm.validatePaymasterUserOp(op, bytes32(0), 0.1 ether);
 
         pm.unpause();
 
@@ -507,9 +503,8 @@ contract QeviePaymasterTest {
         op.paymasterAndData = abi.encodePacked(address(pm));
 
         VM.prank(address(ep));
-        (, uint256 validData) = pm.validatePaymasterUserOp(op, bytes32(0), 0);
-
-        require(validData == 1, "short data should fail gracefully");
+        VM.expectRevert();
+        pm.validatePaymasterUserOp(op, bytes32(0), 0);
     }
 
     function testUnknownModeFailsGracefully() external {
@@ -520,8 +515,7 @@ contract QeviePaymasterTest {
             abi.encodePacked(address(pm), uint128(200_000), uint128(100_000), uint8(0xFF));
 
         VM.prank(address(ep));
-        (, uint256 validData) = pm.validatePaymasterUserOp(op, bytes32(0), 0);
-
-        require(validData == 1, "unknown mode should fail gracefully");
+        VM.expectRevert();
+        pm.validatePaymasterUserOp(op, bytes32(0), 0);
     }
 }

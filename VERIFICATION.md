@@ -323,10 +323,62 @@ This verifies owner signature-envelope validation, counterfactual account deploy
 paymaster-sponsored policy creation, smart-account manager binding, and on-chain policy indexing.
 The app policy form and policies page use the SDK path verified by this smoke test.
 
-2. Fund `QeviePaymaster` EntryPoint deposit: `entryPoint.depositTo{value: 1 ether}(paymasterAddress)`.
+### Bundler Receipt Lookup Fix
 
-3. Test Mode B allowlist token issuance via paymaster-service API.
+Date: 2026-06-08
 
-4. Run full end-to-end gasless transfer: user → bundler RPC → EntryPoint → paymaster → QUSDC transfer.
+The live Voltaire bundler now runs with:
 
-5. After testnet validation, redeploy on mainnet 1990 and record all addresses here.
+- `--logs_incremental_range 10000`
+- `--logs_number_of_ranges 2`
+
+Without these settings, Voltaire queries `eth_getLogs` from `earliest` to
+`latest` while resolving a UserOperation receipt. QIE times out on that
+full-chain scan. Bounded recent ranges avoid the timeout.
+
+Live verification through `https://qevie.duckdns.org/bundler/rpc`:
+
+- Sponsored mint UserOperation:
+  `0x4f72524e2d4eb3c557865610aee3e3554994005f791895d3d22dd29fb3dc2903`
+- Result: operation mined and `eth_getUserOperationReceipt` returned in about
+  12 seconds.
+- Fresh account deployment/mint UserOperation:
+  `0x8b8b9b038ba5cb6d2aeb9935aef6b97b7756cf16bdde1c8d9dfd3e2f45bb25f6`
+- Transaction:
+  `0xed53294ad6212e025692e17a6881b287a15c1b90606195f85d2a08cccafb7fa1`
+- Fresh sponsored policy UserOperation:
+  `0x43fea6be53bacfb68690f9c8d2c6782f605e2f91a19c1a3375c1f21726fe3c3e`
+- Created policy:
+  `0x55d946f09ee20a72b58b4d7b857bfba5555a1ec63266ea71cd75e51fc88e710c`
+- Result: policy was active and readable from `AgentPolicyManager` on QIE
+  testnet.
+
+After a clean bundler restart, the paymaster path remained the default sponsored path:
+
+- Sponsored mint UserOperation:
+  `0xf7479e435c1db41015326686fa74d378f0d73c51956cfc55a2f35dc40a863d01`
+- Result: mined successfully on chain with sponsored gas.
+- Sponsored policy creation UserOperation:
+  `0xe59e57e6c82009b5af2909b5beb1f6f2641f7e5488f7cd70bc2abef2a4c0e594`
+- Result: policy became active on-chain.
+
+Autopilot intent confirmation is now tracked separately from final failure:
+
+- Submitted intents remain in `confirming` until `eth_getUserOperationReceipt` resolves.
+- The activity page no longer shows placeholder `Pending` labels for every pipeline stage.
+
+Paymaster reputation root cause identified in local contract/tests on 2026-06-08:
+
+- The deployed Mode B paymaster returns ERC-4337 `validationData = 1` for non-signature failures such as expired tokens, account cap exhaustion, disallowed targets, and malformed paymaster data.
+- Voltaire classifies that sentinel as `AA34 signature error`, which poisons paymaster reputation and leads to `-32504 banned paymaster`.
+- Local fix: only a real allowlist-signature mismatch still returns `1`; other Mode B rejects now revert with explicit errors instead of looking like signature failures.
+
+### Remaining Follow-Up
+
+1. Fund `QeviePaymaster` EntryPoint deposit: `entryPoint.depositTo{value: 1 ether}(paymasterAddress)`.
+
+2. Test Mode B allowlist token issuance via paymaster-service API.
+
+3. Run full end-to-end gasless transfer: user → bundler RPC → EntryPoint → paymaster → QUSDC transfer.
+
+4. After testnet validation, redeploy on mainnet 1990 and record all addresses here.

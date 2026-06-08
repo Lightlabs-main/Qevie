@@ -14,7 +14,7 @@ import { dirname } from "node:path";
 import type { Address, Hex } from "viem";
 import { AUTOPILOT_INTENT_STORE_PATH } from "./config.js";
 
-export type IntentStatus = "scheduled" | "completed" | "failed" | "cancelled";
+export type IntentStatus = "scheduled" | "confirming" | "completed" | "failed" | "cancelled";
 
 export interface AutopilotIntent {
   id: string;
@@ -34,6 +34,7 @@ export interface AutopilotIntent {
   status: IntentStatus;
   createdAt: number;
   lastTxHash?: Hex;
+  pendingUserOpHash?: Hex;
   lastError?: string;
 }
 
@@ -122,4 +123,9 @@ export function cancelIntent(id: string, smartAccount: Address): boolean {
 /** Scheduled intents whose next run is due at or before `now` (unix seconds). */
 export function dueIntents(now: number): AutopilotIntent[] {
   return loadIntents().filter((i) => i.status === "scheduled" && i.nextRunAt <= now);
+}
+
+/** Intents that have already been submitted and are waiting on a receipt. */
+export function confirmingIntents(): AutopilotIntent[] {
+  return loadIntents().filter((i) => i.status === "confirming" && i.pendingUserOpHash !== undefined);
 }

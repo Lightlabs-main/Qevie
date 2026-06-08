@@ -14,27 +14,26 @@ export default function AutopilotActivity(): React.ReactElement {
 
       <section className="surface-card tight-stack autopilot-empty">
         <div className="autopilot-empty-icon">0</div>
-        <h3>No autonomous actions yet</h3>
+        <h3>Audit trail is still being wired</h3>
         <p className="text-muted">
-          Executed and vetoed decisions will show the policy ID, guardian result,
-          gas mode, UserOperation hash, transaction hash, and receipt ID.
+          The executor, keeper, and receipt paths are live, but this page does not
+          yet stream a full decision log from the service.
         </p>
       </section>
 
       <section className="surface-card tight-stack">
-        <h3>Audit fields</h3>
+        <h3>Current pipeline</h3>
         {[
-          "Watcher decision",
-          "Reputation signal",
-          "Strategist rationale",
-          "Guardian approval or veto",
-          "Gas mode and sponsored quota",
-          "UserOperation and transaction",
-          "Receipt and Passport update",
-        ].map((item) => (
-          <div className="autopilot-status-row" key={item}>
-            <span className="text-muted">{item}</span>
-            <span>Pending</span>
+          ["Watcher", "Intent queue and policy fetch in service"],
+          ["Reputation signal", "Paymaster quota and allowlist checks"],
+          ["Strategist", "Gas-mode selection before submit"],
+          ["Guardian", "On-chain policy caps and expiry"],
+          ["Executor", "Session-key UserOperation submission"],
+          ["Receipt / Passport", "Best-effort receipt issuance after settlement"],
+        ].map(([label, value]) => (
+          <div className="autopilot-status-row" key={label}>
+            <span className="text-muted">{label}</span>
+            <span>{value}</span>
           </div>
         ))}
       </section>
