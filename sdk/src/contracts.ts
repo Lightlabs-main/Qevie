@@ -23,7 +23,7 @@ export interface QevieContracts {
 export const TESTNET_CONTRACTS: QevieContracts = {
   entryPoint: "0xa07d2Ff33400fbE2c741385cb959D5BCbA041493",
   accountFactory: "0xF4cB7EB568cca9714aD3A6adCAFAaBFB39eA6E14",
-  paymaster: "0x1cdD6BC4258F590E0ea2b10E82a8162384d7f5f2",
+  paymaster: "0xFFb8D934972DEFfD1e11eA9A539A9Ac15C9A16EB",
   batchPayments: "0xb07fff088D37355EAD2f4226e208DAA32f7b6a19",
   paymentRequest: "0x9ee2d86248F3811E6e63d7C7F025E717AAE877aB",
   subscriptionManager: "0x0705e239bF3F8250DADA4aad1051C33C32fb988a",
