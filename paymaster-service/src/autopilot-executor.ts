@@ -26,6 +26,7 @@ import {
   type AgentPolicy,
   type AllowlistToken,
   type QevieSigner,
+  type UserOpResult,
 } from "@qevie/sdk";
 import {
   CHAIN_ID,
@@ -61,6 +62,27 @@ function sessionSignerFromKey(privateKey: Hex): QevieSigner {
 
 function getPublicClient(): AnyPublicClient {
   return createPublicClient({ transport: http(RPC_URL) }) as AnyPublicClient;
+}
+
+/**
+ * Reconcile a submitted UserOperation against its receipt for longer than the
+ * SDK's default wait. QIE's bundler can mine an op but lag on indexing the
+ * receipt, so a short wait reports a timeout as failure. Returns the resolved
+ * receipt (mined or genuinely reverted), or null if still unconfirmed.
+ */
+async function confirmReceipt(
+  client: ReturnType<typeof createQevieClient>,
+  userOpHash: Hex,
+  maxMs = 90_000,
+  intervalMs = 3_000,
+): Promise<UserOpResult | null> {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    const receipt = await client.bundler.getUserOperationReceipt(userOpHash);
+    if (receipt !== null && receipt.status !== "pending") return receipt;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return null;
 }
 
 /**
@@ -145,24 +167,48 @@ async function runIntent(
   }
 
   const signer = sessionSignerFromKey(privateKey);
-  const result = await client.agent.executeAutopilotPayment(
-    signer,
-    {
-      smartAccount: intent.smartAccount,
-      policyId: intent.policyId,
-      recipient: intent.recipient,
-      amount,
-      mode: gas.mode,
-    },
-    gas.allowlistToken,
-  );
+  let result: UserOpResult;
+  try {
+    result = await client.agent.executeAutopilotPayment(
+      signer,
+      {
+        smartAccount: intent.smartAccount,
+        policyId: intent.policyId,
+        recipient: intent.recipient,
+        amount,
+        mode: gas.mode,
+      },
+      gas.allowlistToken,
+    );
+  } catch (e) {
+    // The op may already have been submitted when this threw, so stop the intent
+    // rather than let the outer loop retry it and risk a double payment.
+    updateIntent(intent.id, {
+      status: "failed",
+      lastError: `Payment submission error — review before rescheduling: ${e instanceof Error ? e.message : "unknown"}`,
+    });
+    console.error(`[autopilot] intent ${intent.id} submit error:`, e);
+    return;
+  }
+
+  // The op is already submitted. If the short SDK wait did not confirm it, keep
+  // reconciling against the receipt — but NEVER auto-retry an unconfirmed op, or
+  // a recurring intent could double-pay an op that actually mined.
+  if (result.status !== "mined") {
+    const reconciled = await confirmReceipt(client, result.userOpHash);
+    if (reconciled !== null) result = reconciled;
+  }
 
   if (result.status !== "mined" || result.txHash === null) {
+    const reverted = result.status === "failed" && result.txHash !== null;
     updateIntent(intent.id, {
-      lastError: `UserOperation did not mine (status=${result.status}).`,
-      ...(intent.intervalSeconds === null ? { status: "failed" as const } : {}),
+      status: "failed",
+      ...(result.txHash !== null ? { lastTxHash: result.txHash } : {}),
+      lastError: reverted
+        ? "Payment reverted on-chain."
+        : `Payment could not be confirmed (userOp ${result.userOpHash}). Stopped to avoid a double payment — review before rescheduling.`,
     });
-    console.error(`[autopilot] intent ${intent.id} failed to mine`);
+    console.error(`[autopilot] intent ${intent.id} not confirmed (status=${result.status})`);
     return;
   }
 

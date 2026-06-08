@@ -42,7 +42,10 @@ const DEFAULT_GAS: GasConfig = {
   // which EntryPoint v0.7 charges against verificationGasLimit. Unused gas is not
   // billed, so this is safe for subsequent ops on an already-deployed account.
   verificationGasLimit: 3_000_000n,
-  preVerificationGas: 50_000n,
+  // Large-calldata ops (e.g. AgentPolicyManager.createPolicy with a recipients
+  // array) push the bundler's required preVerificationGas above 50k; 100k covers
+  // them with margin. Unused gas is not billed.
+  preVerificationGas: 100_000n,
   maxFeePerGas: 1_000_000_000n, // 1 gwei
   maxPriorityFeePerGas: 1_000_000_000n,
   paymasterVerificationGasLimit: 200_000n,
