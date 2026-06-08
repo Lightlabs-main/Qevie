@@ -38,7 +38,16 @@ export const TESTNET_CONTRACTS: QevieContracts = {
  * QIE mainnet (1990) contract addresses.
  * Populated after Phase 6 mainnet deploy. See VERIFICATION.md for explorer links.
  */
-export const MAINNET_CONTRACTS: Partial<QevieContracts> = {
+export const MAINNET_CONTRACTS: QevieContracts = {
+  entryPoint: "0xa07d2Ff33400fbE2c741385cb959D5BCbA041493",
+  accountFactory: "0x77d6229316E3eFEfD22c2FA267464dB7665446A6",
+  paymaster: "0xd41C837e0c91024b41A2F456DF4100d0c964bBb1",
+  batchPayments: "0x2118BCED5E0dE9CC3283CB6eFce40e0Bc3Cc3061",
+  paymentRequest: "0x850E073f0E7536A03fE22DB0CFBeA08e6DB3e18f",
+  subscriptionManager: "0xb905700A0DF3eA5990710F88C7EDF0Af6e8884c5",
+  usernameRegistry: "0xd94975d051634C4422D84dA9D4D89DC9Fb00DC5F",
+  agentPolicyManager: "0x6ed8b09371e133dab2AC87Da81615D3152092E3A",
+  receiptRegistry: "0xda85bC2bfAf6Cb2062f57dCae90D5b2f4c3C4c0f",
   qusdc: "0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5",
   wqie: "0x0087904D95BEe9E5F24dc8852804b547981A9139",
   dexPair: "0x73a3cCF7da7e473ed2e9994aE764f0E30f4e4DFe",

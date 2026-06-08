@@ -1,17 +1,19 @@
 /**
- * Testnet DEX price heartbeat.
+ * DEX price heartbeat.
  *
  * The QUSDC_GAS path prices native QIE gas in QUSDC from the QIEDex
  * WQIE/QUSDC pair reserves, and the paymaster rejects a quote whose pair
- * timestamp is older than its staleness limit (1h). On mainnet a real pool
- * refreshes its timestamp on every swap, so it is rarely stale. The testnet
- * `TestDexPair` stub only refreshes when `setReserves` is called, so without a
- * heartbeat the quote goes stale after an hour and QUSDC_GAS becomes
- * unavailable for everyone.
+ * timestamp is older than its staleness limit (1h).
  *
- * This loop re-writes the current reserves periodically (testnet only) to keep
- * the quote fresh — i.e. it simulates an active pool. It is a no-op on mainnet
- * and a no-op if no owner key is configured.
+ * - Testnet: the `TestDexPair` stub only refreshes its timestamp when
+ *   `setReserves` is called, so this loop re-writes the current reserves
+ *   periodically to simulate an active pool.
+ * - Mainnet: the real Uniswap-v2 pair only refreshes `blockTimestampLast`
+ *   on swap/mint/burn/sync. A low-traffic pool can therefore go stale, so
+ *   this loop calls the permissionless `sync()` periodically to keep the
+ *   QUSDC_GAS quote fresh.
+ *
+ * No-op if no refresh key is configured.
  */
 
 import {
@@ -46,6 +48,7 @@ const PAIR_ABI = [
     ],
     outputs: [],
   },
+  { type: "function", name: "sync", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "owner", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
 ] as const;
 
@@ -54,7 +57,8 @@ const HEARTBEAT_INTERVAL_MS = Number(
   process.env["DEX_HEARTBEAT_INTERVAL_MS"] ?? 30 * 60_000,
 );
 
-async function beatOnce(): Promise<void> {
+/** Testnet: re-write the stub reserves to bump its timestamp (owner only). */
+async function beatTestnet(): Promise<void> {
   const key = DEX_REFRESH_PRIVATE_KEY();
   if (key === undefined || key === "") return;
   const pair = CONTRACTS.dexPair as Address | undefined;
@@ -90,19 +94,39 @@ async function beatOnce(): Promise<void> {
     args: [r0, r1],
     chain: null,
   });
-  console.log(`[dex-heartbeat] refreshed pair reserves timestamp (tx ${hash})`);
+  console.log(`[dex-heartbeat] refreshed testnet pair reserves timestamp (tx ${hash})`);
 }
 
-/** Start the testnet DEX price heartbeat. No-op on mainnet / without a key. */
+/** Mainnet: call the permissionless sync() to refresh blockTimestampLast. */
+async function beatMainnet(): Promise<void> {
+  const key = DEX_REFRESH_PRIVATE_KEY();
+  if (key === undefined || key === "") return;
+  const pair = CONTRACTS.dexPair as Address | undefined;
+  if (pair === undefined) return;
+
+  const account = privateKeyToAccount(key as Hex);
+  const walletClient = createWalletClient({ account, transport: http(RPC_URL) });
+  const hash = await walletClient.writeContract({
+    address: pair,
+    abi: PAIR_ABI,
+    functionName: "sync",
+    args: [],
+    chain: null,
+  });
+  console.log(`[dex-heartbeat] mainnet pair sync() refreshed QUSDC_GAS quote (tx ${hash})`);
+}
+
+/** Start the DEX price heartbeat. No-op without a refresh key. */
 export function startDexHeartbeat(): void {
-  if (CHAIN_ID !== 1983) return;
   if (DEX_REFRESH_PRIVATE_KEY() === undefined) {
-    console.log("[dex-heartbeat] no DEX refresh key configured — QUSDC_GAS quote may go stale on testnet");
+    console.log("[dex-heartbeat] no DEX refresh key configured — QUSDC_GAS quote may go stale");
     return;
   }
-  console.log(`[dex-heartbeat] starting with interval ${HEARTBEAT_INTERVAL_MS}ms`);
-  void beatOnce().catch((e) => console.error("[dex-heartbeat] error:", e));
+  const beat = CHAIN_ID === 1983 ? beatTestnet : beatMainnet;
+  const label = CHAIN_ID === 1983 ? "testnet setReserves" : "mainnet sync()";
+  console.log(`[dex-heartbeat] starting (${label}) interval ${HEARTBEAT_INTERVAL_MS}ms`);
+  void beat().catch((e) => console.error("[dex-heartbeat] error:", e));
   setInterval(() => {
-    void beatOnce().catch((e) => console.error("[dex-heartbeat] error:", e));
+    void beat().catch((e) => console.error("[dex-heartbeat] error:", e));
   }, HEARTBEAT_INTERVAL_MS);
 }

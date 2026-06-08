@@ -150,6 +150,26 @@ export class QevieAccount {
     };
   }
 
+  /**
+   * Resolve fee fields against the live network gas price. ERC-4337 bundlers
+   * reject a UserOperation whose maxFeePerGas is below the current network
+   * minimum; on mainnet (~1.1 gwei) the 1 gwei default is too low, while on
+   * testnet the price is ~0 so the configured floor is kept. A 25% buffer
+   * absorbs price drift between build and inclusion.
+   */
+  private async resolveFees(gasConfig: GasConfig): Promise<GasConfig> {
+    let gasPrice = 0n;
+    try {
+      gasPrice = await this.publicClient.getGasPrice();
+    } catch {
+      // fall back to the configured floor below
+    }
+    const buffered = gasPrice + gasPrice / 4n;
+    const maxFeePerGas =
+      buffered > gasConfig.maxFeePerGas ? buffered : gasConfig.maxFeePerGas;
+    return { ...gasConfig, maxFeePerGas, maxPriorityFeePerGas: maxFeePerGas };
+  }
+
   /** Build and sign a UserOperation. */
   async buildAndSign(
     callData: Hex,
@@ -157,6 +177,7 @@ export class QevieAccount {
     gasConfig: GasConfig = DEFAULT_GAS,
     allowlistToken?: AllowlistToken,
   ): Promise<PackedUserOp> {
+    gasConfig = await this.resolveFees(gasConfig);
     const [addr, nonce, initCode] = await Promise.all([
       this.getAddress(),
       this.getNonce(),
@@ -211,6 +232,7 @@ export class QevieAccount {
     gasConfig: GasConfig = DEFAULT_GAS,
     allowlistToken?: AllowlistToken,
   ): Promise<PackedUserOp> {
+    gasConfig = await this.resolveFees(gasConfig);
     const nonce = await this.publicClient.readContract({
       address: this.contracts.entryPoint,
       abi: ENTRY_POINT_ABI,

@@ -21,9 +21,9 @@ Qevie runs its **own ERC-4337 paymaster**. Users never have to hold native QIE:
   and charges the user in **QUSDC**, priced live along the QIEDex WQIE→QUSDC route.
   The recipient gets the full amount; the sender pays the amount plus a few
   hundredths of a cent of gas, all in USDC.
-- **Sustainable** — because users pay their own gas in USDC, the model works on
-  mainnet as a **full USDC paymaster** (no sponsored tier) without Qevie
-  subsidising gas forever.
+- **Sustainable** — because users ultimately pay their own gas in USDC, the
+  paymaster behaves the same on mainnet as on testnet (a bounded sponsored
+  onboarding quota, then USDC gas) without Qevie subsidising gas forever.
 
 You hold USDC, you transact. No USDC, no transaction — it's a payment app.
 
@@ -49,7 +49,7 @@ The agents are deterministic and policy-bound — every action is enforced on-ch
 
 Qevie currently includes:
 
-- ERC-4337 smart accounts for each user (EntryPoint v0.7 on QIE testnet)
+- ERC-4337 smart accounts for each user (EntryPoint v0.7, live on QIE testnet `1983` and mainnet `1990`)
 - **Qevie USDC paymaster** — sponsored onboarding then pay-gas-in-USDC
 - **Qevie Autopilot** — server-custodied session keys + unattended executor agent
 - Voltaire bundler wired to the deployed QIE EntryPoint
@@ -66,18 +66,22 @@ This is a working, deployed gas-abstracted stablecoin payment stack, not just a 
 
 ## Gas Model
 
-Qevie has its own paymaster. Qevie does not claim unlimited free gas:
+Qevie runs its own paymaster and is explicit about what is and isn't free:
 
-- The first 3 actions per account are sponsored for onboarding.
-- After that, the user pays the network fee in QUSDC.
-- No QUSDC means no transaction — Qevie is a payment app, so the user simply
-  adds QUSDC to continue.
+- **Sponsored onboarding** — the first **3 actions per smart account** are
+  sponsored, so a brand-new user transacts with **zero** native QIE.
+- **Pay gas in USDC** — once the onboarding quota is used, the paymaster fronts
+  the native QIE gas and charges the user in **QUSDC**, typically a few hundredths
+  of a cent. The recipient always receives the full amount.
+- **No USDC, no transaction** — Qevie is a payment app. If a user can neither be
+  sponsored nor pay USDC gas, the UI tells them to add QUSDC rather than failing
+  silently.
 
-On testnet the sponsored onboarding tier is enabled. On mainnet Qevie runs as a
-full USDC paymaster: every action pays gas in QUSDC.
+This model holds on **both** networks — sponsored onboarding then USDC gas, on
+testnet `1983` and mainnet `1990`.
 
-Qevie Autopilot follows the same model. Agents check that the account can afford
-the payment plus the QUSDC gas fee before scheduling, and pause instead of
+Qevie Autopilot follows the same model: agents verify the account can afford the
+payment **plus** the USDC gas fee before scheduling, and pause instead of
 submitting payments that cannot be funded.
 
 ## Account Model
@@ -189,17 +193,11 @@ Primary contract:
 
 Responsibilities:
 
-- **Mode B (sponsored onboarding)** — sponsor gas for the first 3 ops per account,
-  Sybil-gated by an allowlist token and scoped to whitelisted Qevie targets, with
-  per-account / daily / global budget caps.
-- **Mode A (USDC gas)** — front native QIE gas and charge the user in QUSDC,
-  priced from the QIEDex WQIE/QUSDC pair plus a configurable markup, with a price
-  staleness + minimum-liquidity guard.
-- expose read-only views so the app/agents show an honest gas state:
+- **Sponsored onboarding** — sponsor gas for a new account's first actions.
+- **USDC gas** — front native QIE gas and charge the user in QUSDC.
+- expose read-only views so the app and agents can show an honest gas state:
   `remainingFreeOps(account)`, `qusdcGasAvailable(account, maxGasCostWei)`,
   `getQusdcGasStatus()`.
-- owner controls: pause, QUSDC-gas enable/disable, markup, and optional
-  per-tx / daily USDC-gas safety ceilings (default unlimited).
 
 ### SDK
 
@@ -298,9 +296,11 @@ GET  /autopilot/intents    ?smartAccount=0x..          -> { intents: [...] }
 POST /autopilot/cancel     { id }                       -> { ok }
 ```
 
-## Current Deployment
+## Deployment
 
-QIE testnet chain ID: `1983`
+Qevie is deployed on **QIE mainnet (chain `1990`)**, with the full stack also
+runnable on QIE testnet (chain `1983`). The live app and services are configured
+for mainnet.
 
 Public endpoints:
 
@@ -312,6 +312,7 @@ VPS source and deploy paths:
 
 - source repo: `/opt/qevie`
 - built frontend: `/var/www/qevie`
+- process manager: PM2 (`qevie-app`, `qevie-paymaster`, `qevie-bundler`)
 
 ## Qevie Passport
 
@@ -357,11 +358,27 @@ PM2 process names:
 - `qevie-paymaster`
 - `qevie-bundler`
 
-## Testnet Contracts
+## Mainnet Contracts
 
 The SDK source of truth is [`sdk/src/contracts.ts`](sdk/src/contracts.ts).
 
-Current QIE testnet (chain `1983`) addresses:
+QIE mainnet (chain `1990`) addresses:
+
+- EntryPoint v0.7: `0xa07d2Ff33400fbE2c741385cb959D5BCbA041493`
+- Account factory: `0x77d6229316E3eFEfD22c2FA267464dB7665446A6`
+- **Paymaster (sponsored onboarding + USDC gas): `0xd41C837e0c91024b41A2F456DF4100d0c964bBb1`**
+- **AgentPolicyManager: `0x6ed8b09371e133dab2AC87Da81615D3152092E3A`**
+- Batch payments: `0x2118BCED5E0dE9CC3283CB6eFce40e0Bc3Cc3061`
+- Payment request: `0x850E073f0E7536A03fE22DB0CFBeA08e6DB3e18f`
+- Subscription manager: `0xb905700A0DF3eA5990710F88C7EDF0Af6e8884c5`
+- Username registry: `0xd94975d051634C4422D84dA9D4D89DC9Fb00DC5F`
+- Receipt registry: `0xda85bC2bfAf6Cb2062f57dCae90D5b2f4c3C4c0f`
+- QUSDC (canonical): `0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5`
+- QIEDex pair (WQIE/QUSDC): `0x73a3cCF7da7e473ed2e9994aE764f0E30f4e4DFe`
+
+## Testnet Contracts
+
+QIE testnet (chain `1983`) addresses:
 
 - EntryPoint: `0xa07d2Ff33400fbE2c741385cb959D5BCbA041493`
 - Account factory: `0xF4cB7EB568cca9714aD3A6adCAFAaBFB39eA6E14`
@@ -449,10 +466,10 @@ pnpm contracts:test
 
 ## Status
 
-The current repo and VPS reflect a functioning, deployed QIE testnet payment
-application with:
+Qevie is a functioning, deployed gas-abstracted stablecoin payment stack — live on
+**QIE mainnet (`1990`)** and testnet (`1983`):
 
-- ERC-4337 smart accounts
+- ERC-4337 smart accounts on a self-deployed EntryPoint v0.7
 - the **Qevie USDC paymaster** — sponsored onboarding then pay-gas-in-USDC
 - **Qevie Autopilot** — server-custodied agents making unattended USDC payments
 - QUSDC transfer, batch, request, and subscription flows
@@ -460,6 +477,7 @@ application with:
 - ReceiptRegistry + Qevie Passport reputation
 - a TypeScript SDK for QIE builders
 
-Both core features — the USDC paymaster and the Autopilot agents — are live on the
-testnet deployment and verified end-to-end against the deployed bundler,
-paymaster, and executor.
+Both core features — the USDC paymaster and the Autopilot agents — are verified
+end-to-end against the live bundler, paymaster, and executor. Sponsored onboarding
+is confirmed on mainnet: a fresh smart account is deployed and its first action
+settled with the user paying zero native QIE.
