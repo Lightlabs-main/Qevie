@@ -1,5 +1,6 @@
 import { type Address, isAddress, type PublicClient } from "viem";
-import { QIE_DOMAINS_ABI, USERNAME_REGISTRY_ABI } from "./abis.js";
+import { USERNAME_REGISTRY_ABI } from "./abis.js";
+import { resolveOwnerViaDomainInfo } from "./identity/qieDomains.js";
 import type { QevieContracts } from "./contracts.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,24 +28,15 @@ export async function resolveRecipient(
 
   const lower = recipient.toLowerCase();
 
-  // QIE domain resolution (name.qie).
-  if (lower.endsWith(".qie") && qieDomainsAddress) {
-    try {
-      const domain = lower.slice(0, -4);
-      await client.readContract({
-        address: qieDomainsAddress,
-        abi: QIE_DOMAINS_ABI,
-        functionName: "domainExist",
-        args: [domain],
-      });
-      // Forward lookup (domain → address) requires metadata resolver.
-      // Fall through to username registry for now.
-    } catch {
-      // Domain registry unreachable — fall through.
-    }
+  // QIE domain resolution (name.qie): forward-resolve to the domain owner via
+  // the registry's canonical domainInfo() method. A `.qie` that does not resolve
+  // returns null (it is NOT silently downgraded to a username lookup).
+  if (lower.endsWith(".qie")) {
+    if (!qieDomainsAddress) return null;
+    return resolveOwnerViaDomainInfo(client, qieDomainsAddress, lower);
   }
 
-  const name = lower.endsWith(".qie") ? lower.slice(0, -4) : lower;
+  const name = lower;
   try {
     const resolved = await client.readContract({
       address: contracts.usernameRegistry,

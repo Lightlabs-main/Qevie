@@ -1065,3 +1065,103 @@ a:hover {
     padding-bottom: max(calc(var(--nav-height) + 1.5rem), env(safe-area-inset-bottom));
   }
 }
+
+/* ════════════════════════════════════════════════════
+   UI polish layer — variable backfill, overlap fixes,
+   mobile-app refinements. Appended last so it wins.
+   ════════════════════════════════════════════════════ */
+
+:root {
+  /* Backfill variables referenced above but never defined (caused invisible
+     chip backgrounds, missing button borders, etc.). */
+  --accent-dim: rgba(6, 182, 212, 0.12);
+  --success-dim: rgba(16, 185, 129, 0.12);
+  --error-dim: rgba(244, 63, 94, 0.12);
+  --warning-dim: rgba(245, 158, 11, 0.12);
+  --border-glass: var(--glass-border);
+  --text-dim: var(--text-muted);
+  --blue-deep: #1e3a8a;
+}
+
+/* Chips must never inherit the global 52px button box — they are pills.
+   Fixes oversized, colliding example/action chips. */
+.chip,
+button.chip {
+  height: auto;
+  min-height: 0;
+  padding: 0.3rem 0.7rem;
+  white-space: normal;
+  line-height: 1.25;
+  overflow: visible;
+  text-align: left;
+}
+button.chip { cursor: pointer; }
+button.chip:hover { border-color: var(--accent-soft); }
+
+/* Back button: small square instead of the default full-size button. */
+.back-btn {
+  height: 40px;
+  width: 40px;
+  padding: 0;
+  flex: 0 0 auto;
+  font-size: 1.25rem;
+  background: var(--surface-2);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+}
+
+/* Header row: title block on the left, optional status chip/link on the right,
+   wrapping cleanly on narrow screens (no more stacked/overlapping headers). */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.page-header > .chip,
+.page-header > .history-link,
+.page-header > a:last-child:not(:first-child) {
+  margin-left: auto;
+}
+.page-header > div { min-width: 0; }
+
+/* Long values (addresses, hashes) must wrap instead of overflowing and
+   colliding with their label. */
+.row { gap: var(--s-2); }
+.row-label { flex: 0 0 auto; }
+.row-value { min-width: 0; overflow-wrap: anywhere; text-align: right; }
+.mono { overflow-wrap: anywhere; word-break: break-word; }
+
+/* Responsive headline sizing so big titles never overflow small screens. */
+h1 { font-size: clamp(2.25rem, 9vw, 3rem); }
+.text-gradient { overflow-wrap: anywhere; }
+.page-title { font-size: clamp(1.4rem, 6vw, 1.75rem); overflow-wrap: anywhere; }
+
+/* Bottom nav respects the iOS/Android home indicator. */
+.bottom-nav-wrap {
+  bottom: max(var(--s-3), env(safe-area-inset-bottom));
+}
+
+/* A touch more breathing room above the floating nav. */
+.page-center { padding-bottom: 132px; }
+
+/* Section labels inside a flex header shouldn't add stray bottom gap. */
+.page-header .section-label { margin-bottom: 2px; }
+
+/* Tap feedback for cards that act as links — feels native. */
+a .surface-card,
+a.surface-card,
+.autopilot-link {
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+a:active .surface-card,
+a.surface-card:active,
+.autopilot-link:active {
+  transform: scale(0.985);
+}
+a:hover { text-decoration: none; }
+
+/* Stat tiles / link cards: keep label and value from ever touching. */
+.autopilot-link strong { font-size: 0.95rem; }
+.autopilot-link span { font-size: 0.75rem; line-height: 1.35; }

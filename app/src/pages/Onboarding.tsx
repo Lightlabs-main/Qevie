@@ -2,66 +2,148 @@ import React from "react";
 import { useWallet } from "../hooks/useWallet.js";
 import Logo from "../components/Logo.js";
 
+const FEATURES = [
+  {
+    icon: "◎",
+    label: "Autopilot agents",
+    desc: "Scoped agents execute QUSDC workflows inside on-chain policy limits.",
+  },
+  {
+    icon: "$",
+    label: "Gas in USDC",
+    desc: "No native token needed — the paymaster fronts gas, you pay in QUSDC.",
+  },
+  {
+    icon: "✦",
+    label: "Readable .qie names",
+    desc: "Pay alice.qie. Domains resolve on-chain; policies lock the address.",
+  },
+];
+
 export default function Onboarding(): React.ReactElement {
   const { connect, isConnecting, error, needsWalletApp, walletDeepLink } = useWallet();
 
   return (
-    <div className="flex-center" style={{ minHeight: "100dvh", background: "var(--bg)" }}>
-      <div className="app-container" style={{ paddingBottom: "var(--s-8)" }}>
-        {/* Header Branding - Strictly Centered */}
-        <div className="flex-center" style={{ marginBottom: "var(--s-6)" }}>
-          <Logo size={100} glow={false} />
+    <div style={{ minHeight: "100dvh", background: "var(--bg)", display: "flex" }}>
+      <div
+        className="app-container"
+        style={{
+          flex: 1,
+          justifyContent: "space-between",
+          paddingTop: "max(var(--s-8), env(safe-area-inset-top))",
+          paddingBottom: "max(var(--s-6), env(safe-area-inset-bottom))",
+          gap: "var(--s-6)",
+        }}
+      >
+        {/* Brand + hero */}
+        <div className="tight-stack" style={{ gap: "var(--s-5)" }}>
+          <div className="flex-center" style={{ flexDirection: "column", gap: "var(--s-3)" }}>
+            <Logo size={84} glow={false} />
+            <span
+              style={{
+                fontFamily: "var(--font-heading)",
+                fontWeight: 900,
+                fontSize: "1.5rem",
+                letterSpacing: "0.18em",
+                background: "linear-gradient(135deg, #fff 40%, var(--accent) 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              QEVIE
+            </span>
+          </div>
+
+          <div className="tight-stack" style={{ textAlign: "center", gap: "var(--s-2)" }}>
+            <span className="chip chip-accent" style={{ alignSelf: "center" }}>
+              Agent-native PayFi on QIE
+            </span>
+            <h1 className="text-gradient" style={{ lineHeight: 1.05 }}>
+              Policies in.<br />Autonomous QUSDC out.
+            </h1>
+            <p className="text-muted" style={{ margin: "0 auto", maxWidth: "300px" }}>
+              Tell Qevie what should happen. Autopilot picks the rail; your
+              smart-account policy enforces the boundary.
+            </p>
+          </div>
         </div>
 
-        {/* Hero Section - Tight Alignment */}
-        <div className="tight-stack" style={{ textAlign: "center", marginBottom: "var(--s-6)" }}>
-          <h1 className="text-gradient">Finance, Redefined.</h1>
-          <p className="text-muted" style={{ margin: "0 auto", maxWidth: "320px" }}>
-            Experience seamless stablecoin payments on the high-speed QIE blockchain.
-          </p>
-        </div>
-
-        {/* Feature Rail - Structured Grid */}
-        <div className="tight-stack" style={{ marginBottom: "var(--s-10)" }}>
-          {[
-            { tag: "01", label: "Zero Gas Fees", desc: "No native tokens required for network fees." },
-            { tag: "02", label: "Smart Payments", desc: "One-click settlement via shared web links." },
-            { tag: "03", label: "MPC Security", desc: "Enterprise-grade protection on every wallet." },
-          ].map((f) => (
-            <div key={f.tag} className="surface-card-2" style={{ display: "flex", gap: "var(--s-3)", alignItems: "center" }}>
-              <div style={{ color: "var(--accent)", fontWeight: 900, fontSize: "0.75rem" }}>{f.tag}</div>
-              <div className="tight-stack" style={{ gap: "var(--s-1)" }}>
+        {/* Feature rail */}
+        <div className="tight-stack">
+          {FEATURES.map((f) => (
+            <div
+              key={f.label}
+              className="surface-card"
+              style={{ display: "flex", gap: "var(--s-3)", alignItems: "center" }}
+            >
+              <div
+                style={{
+                  flex: "0 0 auto",
+                  width: 40,
+                  height: 40,
+                  borderRadius: "12px",
+                  display: "grid",
+                  placeItems: "center",
+                  background: "var(--accent-soft)",
+                  color: "var(--accent-light)",
+                  border: "1px solid var(--accent-soft)",
+                  fontWeight: 800,
+                  fontSize: "1.1rem",
+                }}
+              >
+                {f.icon}
+              </div>
+              <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 700, color: "var(--text-pure)" }}>{f.label}</div>
-                <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>{f.desc}</div>
+                <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", lineHeight: 1.4 }}>
+                  {f.desc}
+                </div>
               </div>
             </div>
           ))}
         </div>
 
-        {/* CTA Area - Focused Alignment */}
-        <div className="tight-stack">
-          <button className="btn-primary btn-lg" onClick={() => { void connect(); }} disabled={isConnecting}>
-            {isConnecting
-              ? <div className="flex-center" style={{ gap: "var(--s-2)" }}><span className="spinner" /> CONNECTING...</div>
-              : "LAUNCH APP"
-            }
+        {/* CTA */}
+        <div className="tight-stack" style={{ gap: "var(--s-2)" }}>
+          <button
+            className="btn-primary btn-lg"
+            onClick={() => { void connect(); }}
+            disabled={isConnecting}
+          >
+            {isConnecting ? (
+              <span className="flex-center" style={{ gap: "var(--s-2)" }}>
+                <span className="spinner" /> Connecting…
+              </span>
+            ) : (
+              "Launch Qevie"
+            )}
           </button>
 
-          {error && <div className="alert alert-error" style={{ marginTop: "var(--s-2)" }}>{error}</div>}
+          {error && <div className="alert alert-error">{error}</div>}
 
           {needsWalletApp && (
-            <div className="tight-stack" style={{ marginTop: "var(--s-2)" }}>
-              <a className="btn-secondary btn-lg" href={walletDeepLink} style={{ textAlign: "center", textDecoration: "none" }}>
+            <div className="tight-stack" style={{ gap: "var(--s-2)" }}>
+              <a
+                className="btn-secondary btn-lg"
+                href={walletDeepLink}
+                style={{ textDecoration: "none" }}
+              >
                 Open in MetaMask
               </a>
               <p className="text-muted" style={{ fontSize: "0.75rem", textAlign: "center" }}>
-                Or open this page from inside the QIE Wallet app&apos;s browser.
+                Or open this page inside the QIE Wallet app&apos;s browser.
               </p>
             </div>
           )}
 
-          <div className="flex-center" style={{ marginTop: "var(--s-4)", opacity: 0.4 }}>
-            <span style={{ fontSize: "0.625rem", fontWeight: 800, letterSpacing: "0.2em" }}>POWERED BY QIE FOUNDATION // 2026</span>
+          <div
+            className="flex-center"
+            style={{ marginTop: "var(--s-2)", opacity: 0.4, gap: "0.5rem" }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--success)" }} />
+            <span style={{ fontSize: "0.625rem", fontWeight: 800, letterSpacing: "0.18em" }}>
+              QIE MAINNET · NON-CUSTODIAL
+            </span>
           </div>
         </div>
       </div>
