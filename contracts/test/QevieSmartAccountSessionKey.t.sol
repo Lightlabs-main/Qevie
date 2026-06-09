@@ -80,7 +80,9 @@ contract QevieSmartAccountSessionKeyTest {
             )
         );
         mismatchOp.signature = _signSessionEnvelope(policyId, mismatchHash);
-        require(account.validateUserOp(mismatchOp, mismatchHash, 0) == 1, "policy mismatch accepted");
+        require(
+            account.validateUserOp(mismatchOp, mismatchHash, 0) == 1, "policy mismatch accepted"
+        );
 
         PackedUserOperation memory genericOp;
         bytes32 genericHash = keccak256("generic");
@@ -120,30 +122,30 @@ contract QevieSmartAccountSessionKeyTest {
         address[] memory recipients = new address[](1);
         recipients[0] = recipient;
 
-        IAgentPolicyManager.CreateAgentPolicyParams memory params = IAgentPolicyManager
-            .CreateAgentPolicyParams({
-            smartAccount: address(account),
-            sessionKey: sessionKey,
-            guardian: guardian,
-            token: address(token),
-            maxPerTx: 10e6,
-            dailyLimit: 20e6,
-            weeklyLimit: 50e6,
-            totalLimit: 100e6,
-            maxQusdcGasPerTx: 100_000,
-            dailyQusdcGasCap: 500_000,
-            validAfter: uint64(block.timestamp),
-            validUntil: uint64(block.timestamp + 7 days),
-            allowSinglePayment: true,
-            allowBatchPayment: false,
-            allowPaymentRequest: false,
-            allowSubscription: false,
-            allowSponsoredGas: true,
-            allowQusdcGas: true,
-            allowNativeQieFallback: false,
-            pauseWhenGasUnavailable: true,
-            recipients: recipients
-        });
+        IAgentPolicyManager.CreateAgentPolicyParams memory params =
+            IAgentPolicyManager.CreateAgentPolicyParams({
+                smartAccount: address(account),
+                sessionKey: sessionKey,
+                guardian: guardian,
+                token: address(token),
+                maxPerTx: 10e6,
+                dailyLimit: 20e6,
+                weeklyLimit: 50e6,
+                totalLimit: 100e6,
+                maxQusdcGasPerTx: 100_000,
+                dailyQusdcGasCap: 500_000,
+                validAfter: uint64(block.timestamp),
+                validUntil: uint64(block.timestamp + 7 days),
+                allowSinglePayment: true,
+                allowBatchPayment: false,
+                allowPaymentRequest: false,
+                allowSubscription: false,
+                allowSponsoredGas: true,
+                allowQusdcGas: true,
+                allowNativeQieFallback: false,
+                pauseWhenGasUnavailable: true,
+                recipients: recipients
+            });
 
         VM.prank(owner);
         policyId = manager.createPolicy(params);
@@ -153,9 +155,7 @@ contract QevieSmartAccountSessionKeyTest {
         private
         returns (bytes memory)
     {
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n32", userOpHash)
-        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", userOpHash));
         (uint8 v, bytes32 r, bytes32 s) = VM.sign(SESSION_KEY, digest);
         bytes memory rawSig = abi.encodePacked(r, s, v);
         return abi.encode(uint8(1), abi.encode(policyId, VM.addr(SESSION_KEY), rawSig));

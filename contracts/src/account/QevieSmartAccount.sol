@@ -85,7 +85,8 @@ contract QevieSmartAccount is IAccount {
         _nonReentrantAfter();
     }
 
-    constructor(IEntryPoint anEntryPoint, address initialOwner, address initialPolicyManager) payable {
+    constructor(IEntryPoint anEntryPoint, address initialOwner, address initialPolicyManager)
+        payable {
         if (address(anEntryPoint) == address(0)) revert InvalidEntryPoint();
         if (initialOwner == address(0)) revert InvalidOwner();
         if (initialPolicyManager == address(0)) revert InvalidPolicyManager();
@@ -186,7 +187,11 @@ contract QevieSmartAccount is IAccount {
         emit AgentPolicyManagerUpdated(previousManager, manager);
     }
 
-    function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
+    function isValidSignature(bytes32 hash, bytes calldata signature)
+        external
+        view
+        returns (bytes4)
+    {
         bytes memory signatureBytes = signature;
         address rawSigner = Ecdsa.tryRecover(hash, signatureBytes);
         address messageSigner = Ecdsa.tryRecover(hash.toEthSignedMessageHash(), signatureBytes);
@@ -219,7 +224,9 @@ contract QevieSmartAccount is IAccount {
         bytes32 userOpHash,
         bytes memory signatureData
     ) private view returns (bool) {
-        if (address(agentPolicyManager) == address(0)) revert PolicyManagerNotSet();
+        if (address(agentPolicyManager) == address(0)) {
+            revert PolicyManagerNotSet();
+        }
 
         (bytes32 policyId, address sessionKey, bytes memory sessionSignature) =
             abi.decode(signatureData, (bytes32, address, bytes));

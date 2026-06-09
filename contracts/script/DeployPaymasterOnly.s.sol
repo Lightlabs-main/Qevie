@@ -47,11 +47,7 @@ contract DeployPaymasterOnly {
         VM.startBroadcast(deployerKey);
 
         QeviePaymaster paymaster = new QeviePaymaster(
-            IEntryPoint(entryPointAddr),
-            IERC20(qusdc),
-            wqie,
-            IQIEDexPair(dexPair),
-            trustedSigner
+            IEntryPoint(entryPointAddr), IERC20(qusdc), wqie, IQIEDexPair(dexPair), trustedSigner
         );
 
         // Re-whitelist the same targets the previous paymaster allowed.

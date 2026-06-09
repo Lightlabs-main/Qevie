@@ -35,7 +35,10 @@ interface IAgentPolicyManager {
     function revokePolicy(bytes32 policyId) external;
     function guardianRevoke(bytes32 policyId, string calldata reason) external;
     function setRecipients(bytes32 policyId, address[] calldata recipients, bool allowed) external;
-    function getPoliciesBySmartAccount(address smartAccount) external view returns (bytes32[] memory);
+    function getPoliciesBySmartAccount(address smartAccount)
+        external
+        view
+        returns (bytes32[] memory);
     function getPolicy(bytes32 policyId) external view returns (AgentPolicy memory);
     function getPolicySessionKey(bytes32 policyId) external view returns (address);
     function isRecipientAllowed(bytes32 policyId, address recipient) external view returns (bool);
@@ -54,7 +57,15 @@ interface IAgentPolicyManager {
         address[] calldata targets,
         uint256[] calldata values,
         bytes[] calldata callData
-    ) external view returns (bool allowed, AgentActionType actionType, uint256 totalAmount, string memory reason);
+    )
+        external
+        view
+        returns (
+            bool allowed,
+            AgentActionType actionType,
+            uint256 totalAmount,
+            string memory reason
+        );
     function recordSessionCall(
         bytes32 policyId,
         address target,

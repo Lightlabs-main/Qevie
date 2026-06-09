@@ -44,9 +44,8 @@ contract AutopilotPolicySmoke {
 
         smartAccount = factory.getAddress(owner, SALT);
         uint256 policyNonce = _policyNonce(address(manager), smartAccount);
-        policyId = keccak256(
-            abi.encode(block.chainid, smartAccount, VM.addr(0xA710), owner, policyNonce)
-        );
+        policyId =
+            keccak256(abi.encode(block.chainid, smartAccount, VM.addr(0xA710), owner, policyNonce));
 
         PackedUserOperation memory userOp = PackedUserOperation({
             sender: smartAccount,
@@ -61,14 +60,10 @@ contract AutopilotPolicySmoke {
             accountGasLimits: _pack(VERIFICATION_GAS, CALL_GAS),
             preVerificationGas: PRE_VERIFICATION_GAS,
             gasFees: _pack(MAX_FEE, MAX_FEE),
-            paymasterAndData: _buildPaymasterAndData(
-                paymaster, paymasterSignerKey, smartAccount
-            ),
+            paymasterAndData: _buildPaymasterAndData(paymaster, paymasterSignerKey, smartAccount),
             signature: ""
         });
-        userOp.signature = _signOwnerEnvelope(
-            ownerKey, _userOpDigest(entryPoint, userOp)
-        );
+        userOp.signature = _signOwnerEnvelope(ownerKey, _userOpDigest(entryPoint, userOp));
 
         VM.startBroadcast(ownerKey);
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
@@ -86,52 +81,48 @@ contract AutopilotPolicySmoke {
         require(policies.length > 0 && policies[policies.length - 1] == policyId, "policy missing");
     }
 
-    function _buildCallData(
-        IAgentPolicyManager manager,
-        address smartAccount,
-        address qusdc
-    ) private returns (bytes memory) {
+    function _buildCallData(IAgentPolicyManager manager, address smartAccount, address qusdc)
+        private
+        returns (bytes memory)
+    {
         address[] memory recipients = new address[](1);
         recipients[0] = address(0xBEEF);
-        IAgentPolicyManager.CreateAgentPolicyParams memory params = IAgentPolicyManager
-            .CreateAgentPolicyParams({
-            smartAccount: smartAccount,
-            sessionKey: VM.addr(0xA710),
-            guardian: VM.addr(0x6A11D),
-            token: qusdc,
-            maxPerTx: 10e6,
-            dailyLimit: 20e6,
-            weeklyLimit: 50e6,
-            totalLimit: 100e6,
-            maxQusdcGasPerTx: 100_000,
-            dailyQusdcGasCap: 1e6,
-            validAfter: uint64(block.timestamp),
-            validUntil: uint64(block.timestamp + 7 days),
-            allowSinglePayment: true,
-            allowBatchPayment: false,
-            allowPaymentRequest: false,
-            allowSubscription: false,
-            allowSponsoredGas: true,
-            allowQusdcGas: true,
-            allowNativeQieFallback: false,
-            pauseWhenGasUnavailable: true,
-            recipients: recipients
-        });
+        IAgentPolicyManager.CreateAgentPolicyParams memory params =
+            IAgentPolicyManager.CreateAgentPolicyParams({
+                smartAccount: smartAccount,
+                sessionKey: VM.addr(0xA710),
+                guardian: VM.addr(0x6A11D),
+                token: qusdc,
+                maxPerTx: 10e6,
+                dailyLimit: 20e6,
+                weeklyLimit: 50e6,
+                totalLimit: 100e6,
+                maxQusdcGasPerTx: 100_000,
+                dailyQusdcGasCap: 1e6,
+                validAfter: uint64(block.timestamp),
+                validUntil: uint64(block.timestamp + 7 days),
+                allowSinglePayment: true,
+                allowBatchPayment: false,
+                allowPaymentRequest: false,
+                allowSubscription: false,
+                allowSponsoredGas: true,
+                allowQusdcGas: true,
+                allowNativeQieFallback: false,
+                pauseWhenGasUnavailable: true,
+                recipients: recipients
+            });
         bytes memory managerCall = abi.encodeCall(manager.createPolicy, (params));
-        return abi.encodeCall(
-            QevieSmartAccount.execute, (address(manager), uint256(0), managerCall)
-        );
+        return
+            abi.encodeCall(QevieSmartAccount.execute, (address(manager), uint256(0), managerCall));
     }
 
-    function _buildPaymasterAndData(
-        address paymaster,
-        uint256 signerKey,
-        address smartAccount
-    ) private returns (bytes memory) {
+    function _buildPaymasterAndData(address paymaster, uint256 signerKey, address smartAccount)
+        private
+        returns (bytes memory)
+    {
         uint32 expiry = uint32(block.timestamp + 10 minutes);
         bytes32 digest = keccak256(abi.encode(smartAccount, expiry, block.chainid));
-        bytes32 ethDigest =
-            keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", digest));
+        bytes32 ethDigest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", digest));
         (uint8 v, bytes32 r, bytes32 s) = VM.sign(signerKey, ethDigest);
         return abi.encodePacked(
             paymaster,
@@ -145,10 +136,7 @@ contract AutopilotPolicySmoke {
         );
     }
 
-    function _signOwnerEnvelope(uint256 ownerKey, bytes32 digest)
-        private
-        returns (bytes memory)
-    {
+    function _signOwnerEnvelope(uint256 ownerKey, bytes32 digest) private returns (bytes memory) {
         (uint8 v, bytes32 r, bytes32 s) = VM.sign(ownerKey, digest);
         return abi.encode(uint8(0), abi.encodePacked(r, s, v));
     }

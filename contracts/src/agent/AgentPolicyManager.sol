@@ -84,7 +84,9 @@ contract AgentPolicyManager is IAgentPolicyManager {
         AgentActionType actionType,
         uint256 amount
     );
-    event AgentPolicyRecipientUpdated(bytes32 indexed policyId, address indexed recipient, bool allowed);
+    event AgentPolicyRecipientUpdated(
+        bytes32 indexed policyId, address indexed recipient, bool allowed
+    );
     event AgentPolicyAllowedTargetUpdated(address indexed target, bool allowed);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
@@ -151,13 +153,13 @@ contract AgentPolicyManager is IAgentPolicyManager {
         ) revert InvalidLimit();
 
         address accountOwner = IQevieSmartAccountOwner(params.smartAccount).owner();
-        if (msg.sender != accountOwner && msg.sender != params.smartAccount) revert NotPolicyOwner();
+        if (msg.sender != accountOwner && msg.sender != params.smartAccount) {
+            revert NotPolicyOwner();
+        }
 
         uint256 nonce = policyNonce[params.smartAccount]++;
         policyId = keccak256(
-            abi.encode(
-                block.chainid, params.smartAccount, params.sessionKey, accountOwner, nonce
-            )
+            abi.encode(block.chainid, params.smartAccount, params.sessionKey, accountOwner, nonce)
         );
 
         AgentPolicy storage policy = _policies[policyId];
@@ -207,7 +209,9 @@ contract AgentPolicyManager is IAgentPolicyManager {
 
     function revokePolicy(bytes32 policyId) external {
         AgentPolicy storage policy = _getPolicyStorage(policyId);
-        if (msg.sender != policy.owner && msg.sender != policy.smartAccount) revert NotPolicyOwner();
+        if (msg.sender != policy.owner && msg.sender != policy.smartAccount) {
+            revert NotPolicyOwner();
+        }
         policy.active = false;
         emit AgentPolicyRevoked(policyId, policy.smartAccount);
     }
@@ -222,7 +226,9 @@ contract AgentPolicyManager is IAgentPolicyManager {
 
     function setRecipients(bytes32 policyId, address[] calldata recipients, bool allowed) external {
         AgentPolicy storage policy = _getPolicyStorage(policyId);
-        if (msg.sender != policy.owner && msg.sender != policy.smartAccount) revert NotPolicyOwner();
+        if (msg.sender != policy.owner && msg.sender != policy.smartAccount) {
+            revert NotPolicyOwner();
+        }
         if (recipients.length == 0) revert EmptyRecipients();
         for (uint256 i; i < recipients.length; ++i) {
             address recipient = recipients[i];
@@ -259,7 +265,11 @@ contract AgentPolicyManager is IAgentPolicyManager {
         address target,
         uint256 value,
         bytes calldata callData
-    ) external view returns (bool allowed, bytes4 action, uint256 totalAmount, string memory reason) {
+    )
+        external
+        view
+        returns (bool allowed, bytes4 action, uint256 totalAmount, string memory reason)
+    {
         AgentPolicy storage policy = _getPolicyStorage(policyId);
         _basePolicyChecks(policy, smartAccount, sessionKey);
         return _validateSingleChecked(policyId, policy, target, value, callData);
@@ -275,17 +285,24 @@ contract AgentPolicyManager is IAgentPolicyManager {
     )
         external
         view
-        returns (bool allowed, AgentActionType actionType, uint256 totalAmount, string memory reason)
+        returns (
+            bool allowed,
+            AgentActionType actionType,
+            uint256 totalAmount,
+            string memory reason
+        )
     {
         AgentPolicy storage policy = _getPolicyStorage(policyId);
         _basePolicyChecks(policy, smartAccount, sessionKey);
         return _validateBatchChecked(policyId, policy, targets, values, callData);
     }
 
-    function recordSessionCall(bytes32 policyId, address target, uint256 value, bytes calldata callData)
-        external
-        returns (AgentActionType actionType, uint256 totalAmount)
-    {
+    function recordSessionCall(
+        bytes32 policyId,
+        address target,
+        uint256 value,
+        bytes calldata callData
+    ) external returns (AgentActionType actionType, uint256 totalAmount) {
         AgentPolicy storage policy = _getPolicyStorage(policyId);
         if (msg.sender != policy.smartAccount) revert UnauthorizedCaller();
         (bool allowed,, uint256 amount, string memory reason) =
@@ -333,9 +350,16 @@ contract AgentPolicyManager is IAgentPolicyManager {
     )
         private
         view
-        returns (bool allowed, AgentActionType actionType, uint256 totalAmount, string memory reason)
+        returns (
+            bool allowed,
+            AgentActionType actionType,
+            uint256 totalAmount,
+            string memory reason
+        )
     {
-        if (targets.length == 0) return (false, AgentActionType.BATCH_PAYMENT, 0, "empty batch");
+        if (targets.length == 0) {
+            return (false, AgentActionType.BATCH_PAYMENT, 0, "empty batch");
+        }
         if (targets.length != values.length || targets.length != callData.length) {
             return (false, AgentActionType.BATCH_PAYMENT, 0, "array length mismatch");
         }
@@ -375,7 +399,11 @@ contract AgentPolicyManager is IAgentPolicyManager {
         address target,
         uint256 value,
         bytes calldata callData
-    ) private view returns (bool allowed, bytes4 action, uint256 totalAmount, string memory reason) {
+    )
+        private
+        view
+        returns (bool allowed, bytes4 action, uint256 totalAmount, string memory reason)
+    {
         return _validateSingleChecked(policyId, policy, target, value, callData);
     }
 
@@ -388,7 +416,12 @@ contract AgentPolicyManager is IAgentPolicyManager {
     )
         private
         view
-        returns (bool allowed, AgentActionType actionType, uint256 totalAmount, string memory reason)
+        returns (
+            bool allowed,
+            AgentActionType actionType,
+            uint256 totalAmount,
+            string memory reason
+        )
     {
         return _validateBatchChecked(policyId, policy, targets, values, callData);
     }
@@ -399,8 +432,14 @@ contract AgentPolicyManager is IAgentPolicyManager {
         address target,
         uint256 value,
         bytes calldata callData
-    ) private view returns (bool allowed, bytes4 action, uint256 totalAmount, string memory reason) {
-        if (value != 0) return (false, bytes4(0), 0, "native value not allowed");
+    )
+        private
+        view
+        returns (bool allowed, bytes4 action, uint256 totalAmount, string memory reason)
+    {
+        if (value != 0) {
+            return (false, bytes4(0), 0, "native value not allowed");
+        }
         if (!allowedTargets[target]) return (false, bytes4(0), 0, "unsupported target");
         if (callData.length < 4) return (false, bytes4(0), 0, "unsupported selector");
 
@@ -430,27 +469,42 @@ contract AgentPolicyManager is IAgentPolicyManager {
                 if (amounts[i] == 0) return (false, selector, 0, "amount is zero");
                 batchAmount += amounts[i];
             }
-            return _validateAggregateSpend(policy, AgentActionType.BATCH_PAYMENT, batchAmount, selector);
+            return
+                _validateAggregateSpend(
+                    policy, AgentActionType.BATCH_PAYMENT, batchAmount, selector
+                );
         }
 
         if (selector == CREATE_REQUEST_SELECTOR) {
-            if (!policy.allowPaymentRequest) return (false, selector, 0, "payment request disabled");
-            (address payer, uint256 amount,,) = abi.decode(callData[4:], (address, uint256, bytes32, uint64));
+            if (!policy.allowPaymentRequest) {
+                return (false, selector, 0, "payment request disabled");
+            }
+            (address payer, uint256 amount,,) =
+                abi.decode(callData[4:], (address, uint256, bytes32, uint64));
             if (payer != address(0) && payer != policy.smartAccount) {
                 return (false, selector, 0, "wrong payer");
             }
-            return _validateAggregateSpend(policy, AgentActionType.PAYMENT_REQUEST, amount, selector);
+            return
+                _validateAggregateSpend(policy, AgentActionType.PAYMENT_REQUEST, amount, selector);
         }
 
         if (selector == PAY_REQUEST_SELECTOR) {
-            if (!policy.allowPaymentRequest) return (false, selector, 0, "payment request disabled");
+            if (!policy.allowPaymentRequest) {
+                return (false, selector, 0, "payment request disabled");
+            }
             (uint256 requestId) = abi.decode(callData[4:], (uint256));
-            IPaymentRequestLike.Request memory req = IPaymentRequestLike(target).getRequest(requestId);
+            IPaymentRequestLike.Request memory req =
+                IPaymentRequestLike(target).getRequest(requestId);
             if (req.payer != address(0) && req.payer != policy.smartAccount) {
                 return (false, selector, 0, "wrong payer");
             }
             return _validateSpend(
-                policyId, policy, AgentActionType.PAYMENT_REQUEST, req.requestor, req.amount, selector
+                policyId,
+                policy,
+                AgentActionType.PAYMENT_REQUEST,
+                req.requestor,
+                req.amount,
+                selector
             );
         }
 
@@ -463,7 +517,10 @@ contract AgentPolicyManager is IAgentPolicyManager {
                 return (false, selector, 0, "recipient not allowlisted");
             }
             uint256 totalExposure = amount * maxPayments;
-            return _validateAggregateSpend(policy, AgentActionType.SUBSCRIPTION, totalExposure, selector);
+            return
+                _validateAggregateSpend(
+                    policy, AgentActionType.SUBSCRIPTION, totalExposure, selector
+                );
         }
 
         return (false, selector, 0, "unsupported selector");
@@ -476,7 +533,11 @@ contract AgentPolicyManager is IAgentPolicyManager {
         address recipient,
         uint256 amount,
         bytes4 selector
-    ) private view returns (bool allowed, bytes4 action, uint256 totalAmount, string memory reason) {
+    )
+        private
+        view
+        returns (bool allowed, bytes4 action, uint256 totalAmount, string memory reason)
+    {
         if (!_allowedRecipientsForPolicy(policyId, recipient)) {
             return (false, selector, 0, "recipient not allowlisted");
         }
@@ -506,11 +567,10 @@ contract AgentPolicyManager is IAgentPolicyManager {
         return (true, selector, totalAmount, "");
     }
 
-    function _basePolicyChecks(
-        AgentPolicy storage policy,
-        address smartAccount,
-        address sessionKey
-    ) private view {
+    function _basePolicyChecks(AgentPolicy storage policy, address smartAccount, address sessionKey)
+        private
+        view
+    {
         if (policy.smartAccount == address(0)) revert UnknownPolicy();
         if (!policy.active) revert ValidationFailed("inactive policy");
         if (policy.guardianRevoked) revert ValidationFailed("guardian revoked");

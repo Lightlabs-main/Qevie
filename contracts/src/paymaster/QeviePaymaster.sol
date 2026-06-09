@@ -468,8 +468,7 @@ contract QeviePaymaster is IPaymaster {
             return (false, quotedQUSDC, "Gas charge exceeds per-tx cap");
         }
         if (dailyQusdcGasCap != 0) {
-            uint256 spentToday =
-                (block.timestamp / 86_400 == qusdcGasDay) ? qusdcGasSpentToday : 0;
+            uint256 spentToday = (block.timestamp / 86_400 == qusdcGasDay) ? qusdcGasSpentToday : 0;
             if (spentToday + quotedQUSDC > dailyQusdcGasCap) {
                 return (false, quotedQUSDC, "Daily QUSDC gas cap reached");
             }
@@ -536,8 +535,7 @@ contract QeviePaymaster is IPaymaster {
             revert QusdcChargeAboveCap(quotedQUSDC, maxQusdcGasPerTx);
         }
         if (dailyQusdcGasCap != 0) {
-            uint256 spentToday =
-                (block.timestamp / 86_400 == qusdcGasDay) ? qusdcGasSpentToday : 0;
+            uint256 spentToday = (block.timestamp / 86_400 == qusdcGasDay) ? qusdcGasSpentToday : 0;
             if (spentToday + quotedQUSDC > dailyQusdcGasCap) {
                 revert DailyQusdcGasCapExceeded();
             }

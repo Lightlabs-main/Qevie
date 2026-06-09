@@ -34,9 +34,8 @@ contract AgentPolicyManagerTest {
         QevieSmartAccount account =
             new QevieSmartAccount(IEntryPoint(address(this)), owner, address(manager));
 
-        IAgentPolicyManager.CreateAgentPolicyParams memory params = _policyParams(
-            address(account), sessionKey, guardian, address(token), recipient
-        );
+        IAgentPolicyManager.CreateAgentPolicyParams memory params =
+            _policyParams(address(account), sessionKey, guardian, address(token), recipient);
         VM.prank(owner);
         bytes32 policyId = manager.createPolicy(params);
 
@@ -66,28 +65,28 @@ contract AgentPolicyManagerTest {
         QevieSmartAccount account =
             new QevieSmartAccount(IEntryPoint(address(this)), owner, address(manager));
 
-        IAgentPolicyManager.CreateAgentPolicyParams memory params = _policyParams(
-            address(account), sessionKey, guardian, address(token), recipient
-        );
+        IAgentPolicyManager.CreateAgentPolicyParams memory params =
+            _policyParams(address(account), sessionKey, guardian, address(token), recipient);
         VM.prank(owner);
         bytes32 policyId = manager.createPolicy(params);
 
         VM.prank(guardian);
         manager.guardianRevoke(policyId, "risk");
 
-        (bool success,) = address(manager).staticcall(
-            abi.encodeCall(
-                manager.validateSessionCall,
-                (
-                    policyId,
-                    address(account),
-                    sessionKey,
-                    address(token),
-                    0,
-                    abi.encodeWithSignature("transfer(address,uint256)", recipient, 1e6)
+        (bool success,) = address(manager)
+            .staticcall(
+                abi.encodeCall(
+                    manager.validateSessionCall,
+                    (
+                        policyId,
+                        address(account),
+                        sessionKey,
+                        address(token),
+                        0,
+                        abi.encodeWithSignature("transfer(address,uint256)", recipient, 1e6)
+                    )
                 )
-            )
-        );
+            );
         require(!success, "validation should revert after guardian revoke");
     }
 
@@ -104,9 +103,8 @@ contract AgentPolicyManagerTest {
         QevieSmartAccount account =
             new QevieSmartAccount(IEntryPoint(address(this)), owner, address(manager));
 
-        IAgentPolicyManager.CreateAgentPolicyParams memory params = _policyParams(
-            address(account), sessionKey, guardian, address(token), recipient
-        );
+        IAgentPolicyManager.CreateAgentPolicyParams memory params =
+            _policyParams(address(account), sessionKey, guardian, address(token), recipient);
         VM.prank(owner);
         bytes32 policyId = manager.createPolicy(params);
 

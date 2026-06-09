@@ -66,11 +66,10 @@ contract QevieSmartAccountFactory {
             revert InvalidOwner();
         }
 
-        bytes memory initCode =
-            abi.encodePacked(
-                type(QevieSmartAccount).creationCode,
-                abi.encode(ENTRY_POINT, owner, address(AGENT_POLICY_MANAGER))
-            );
+        bytes memory initCode = abi.encodePacked(
+            type(QevieSmartAccount).creationCode,
+            abi.encode(ENTRY_POINT, owner, address(AGENT_POLICY_MANAGER))
+        );
         bytes32 initCodeHash;
         assembly {
             initCodeHash := keccak256(add(initCode, 0x20), mload(initCode))
