@@ -61,4 +61,8 @@ export const MAINNET_CONTRACTS: QevieContracts = {
   qusdc: "0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5",
   wqie: "0x0087904D95BEe9E5F24dc8852804b547981A9139",
   dexPair: "0x73a3cCF7da7e473ed2e9994aE764f0E30f4e4DFe",
+  // Verified QIE Domains registry proxy — enables `.qie` forward resolution via
+  // domainInfo() out-of-the-box for any SDK consumer (confirmed live:
+  // qevie.qie -> 0x69eb1bAA26BffCD0fA9089aa2187F6Ca3e2A54f6).
+  qieDomainRegistry: "0x26cCB3fABd6db18834987134d715Ba2346CE7223",
 } as const;
