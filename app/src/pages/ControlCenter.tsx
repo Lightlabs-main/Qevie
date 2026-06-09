@@ -58,7 +58,7 @@ export default function ControlCenter(): React.ReactElement {
           inside smart-account limits. Manual rails remain available as fallback.
         </p>
         <div className="autopilot-actions">
-          <Link className="btn btn-primary" to="/agent">Open Agent Commands</Link>
+          <Link className="btn btn-primary" to="/agent">Agent Commands</Link>
           <Link className="btn btn-secondary" to="/autopilot/new">Create policy</Link>
         </div>
       </section>

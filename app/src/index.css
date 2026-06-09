@@ -1208,3 +1208,17 @@ a:hover { text-decoration: none; }
   text-align: right;
   overflow-wrap: anywhere;
 }
+
+/* Buttons inside the 2-up action grid must fill their cell with modest padding,
+   not the global 64px side padding (which overflowed long labels like
+   "Agent Commands" and misaligned the row). */
+.autopilot-actions .btn,
+.autopilot-actions .btn-primary,
+.autopilot-actions .btn-secondary {
+  width: 100%;
+  padding: 0 var(--s-2);
+  font-size: 0.875rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
