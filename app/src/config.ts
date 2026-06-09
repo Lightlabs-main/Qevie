@@ -1,6 +1,13 @@
-import { MAINNET_CONTRACTS, TESTNET_CONTRACTS, type QevieContracts } from "@qevie/sdk";
+import { MAINNET_CONTRACTS, TESTNET_CONTRACTS, type QevieContracts, type QieDomainConfig } from "@qevie/sdk";
 
 const isTestnet = import.meta.env["VITE_USE_TESTNET"] === "true";
+
+/**
+ * Verified QIE Domains registry proxy on QIE mainnet (reverse lookups only:
+ * address -> name.qie, domainExist). Forward resolution is NOT assumed — a
+ * forward resolver is only used when explicitly configured via env.
+ */
+const VERIFIED_QIE_DOMAIN_REGISTRY_MAINNET = "0x26cCB3fABd6db18834987134d715Ba2346CE7223";
 
 const chainId: 1990 | 1983 = isTestnet ? 1983 : 1990;
 
@@ -26,6 +33,35 @@ if (receiptRegistry !== undefined && receiptRegistry !== "") {
   contractAddresses.receiptRegistry = receiptRegistry as `0x${string}`;
 }
 
+// QIE Domain Resolver (optional, chain-aware). Registry = reverse verification;
+// resolver = forward (name.qie -> address). Neither is faked: with no resolver
+// configured, `.qie` forward resolution is cleanly unavailable.
+const envResolver = isTestnet
+  ? import.meta.env["VITE_QIE_DOMAIN_RESOLVER_TESTNET"]
+  : import.meta.env["VITE_QIE_DOMAIN_RESOLVER_MAINNET"];
+const envRegistry = isTestnet
+  ? import.meta.env["VITE_QIE_DOMAIN_REGISTRY_TESTNET"]
+  : import.meta.env["VITE_QIE_DOMAIN_REGISTRY_MAINNET"];
+
+const qieDomainResolver =
+  envResolver !== undefined && envResolver !== "" ? (envResolver as `0x${string}`) : undefined;
+const qieDomainRegistry =
+  envRegistry !== undefined && envRegistry !== ""
+    ? (envRegistry as `0x${string}`)
+    : isTestnet
+      ? undefined
+      : (VERIFIED_QIE_DOMAIN_REGISTRY_MAINNET as `0x${string}`);
+
+if (qieDomainResolver !== undefined) contractAddresses.qieDomainResolver = qieDomainResolver;
+if (qieDomainRegistry !== undefined) contractAddresses.qieDomainRegistry = qieDomainRegistry;
+
+const qieDomain: QieDomainConfig = {
+  enabled: qieDomainResolver !== undefined || qieDomainRegistry !== undefined,
+  ...(qieDomainResolver !== undefined ? { resolver: qieDomainResolver } : {}),
+  ...(qieDomainRegistry !== undefined ? { registry: qieDomainRegistry } : {}),
+  resolverType: qieDomainResolver !== undefined ? "ens_like" : "disabled",
+};
+
 if (!isTestnet) {
   const missing = (Object.keys(contractAddresses) as (keyof QevieContracts)[]).filter(
     (k) => contractAddresses[k] === undefined,
@@ -47,4 +83,5 @@ export const APP_CONFIG = {
       : contractAddresses.agentPolicyManager,
   autopilotExecutionEnabled,
   contracts: contractAddresses as QevieContracts,
+  qieDomain,
 };

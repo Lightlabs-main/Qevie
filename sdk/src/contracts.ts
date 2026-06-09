@@ -13,6 +13,16 @@ export interface QevieContracts {
   qusdc: Address;
   wqie: Address;
   dexPair: Address;
+  /**
+   * QIE Domains registry (reverse lookups: address -> name.qie, domainExist).
+   * Optional — when absent, `.qie` reverse verification is unavailable.
+   */
+  qieDomainRegistry?: Address;
+  /**
+   * QIE Domains forward resolver (name.qie -> address). Optional — when absent,
+   * `.qie` forward resolution is cleanly unavailable (never faked).
+   */
+  qieDomainResolver?: Address;
 }
 
 /**

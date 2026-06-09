@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import { gaslessParams } from "../lib/gasless.js";
@@ -16,10 +17,14 @@ export default function Subscriptions(): React.ReactElement {
   const { signer, address } = useWallet();
   const gasStatus = useGasStatus(client, signer, address);
 
-  const [payee, setPayee] = useState("");
-  const [amount, setAmount] = useState("");
-  const [periodDays, setPeriodDays] = useState(30);
-  const [maxPayments, setMaxPayments] = useState("12");
+  const [params] = useSearchParams();
+  const prefillPeriod = Number(params.get("periodDays"));
+  const [payee, setPayee] = useState(params.get("payee") ?? "");
+  const [amount, setAmount] = useState(params.get("amount") ?? "");
+  const [periodDays, setPeriodDays] = useState(
+    Number.isFinite(prefillPeriod) && prefillPeriod > 0 ? prefillPeriod : 30,
+  );
+  const [maxPayments, setMaxPayments] = useState(params.get("maxPayments") ?? "12");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);

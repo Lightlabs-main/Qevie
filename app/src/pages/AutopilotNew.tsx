@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { isAddress, parseUnits, type Address, type Hex } from "viem";
 import { useQevieClient } from "@qevie/sdk/react";
+import type { ResolvedRecipient } from "@qevie/sdk";
 import { useWallet } from "../hooks/useWallet.js";
 import { APP_CONFIG } from "../config.js";
 import { gaslessParams } from "../lib/gasless.js";
@@ -38,6 +39,7 @@ export default function AutopilotNew(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [policyId, setPolicyId] = useState<Hex | null>(null);
   const [txHash, setTxHash] = useState<Hex | null>(null);
+  const [lockedRecipients, setLockedRecipients] = useState<ResolvedRecipient[]>([]);
 
   const createPolicy = async (): Promise<void> => {
     if (signer === null || address === null) {
@@ -65,9 +67,20 @@ export default function AutopilotNew(): React.ReactElement {
         .split(",")
         .map((value) => value.trim())
         .filter((value) => value !== "");
-      if (recipientList.length === 0 || recipientList.some((value) => !isAddress(value))) {
-        throw new Error("Add at least one valid recipient address.");
+      if (recipientList.length === 0) {
+        throw new Error("Add at least one recipient (address, username, or name.qie).");
       }
+      // Resolve every recipient (incl. .qie) to a concrete address BEFORE the
+      // policy is signed. The on-chain policy locks the RESOLVED ADDRESS, never
+      // the domain string — so a later domain change cannot redirect this policy.
+      const resolved = await Promise.all(
+        recipientList.map(async (value): Promise<ResolvedRecipient> => {
+          const r = await client.resolveDetailed(value);
+          if (!r.ok) throw new Error(`${value}: ${r.message}`);
+          return r;
+        }),
+      );
+      const resolvedAddresses = resolved.map((r) => r.address);
       if (!allowSingle && !allowBatch && !allowRequest && !allowSubscription) {
         throw new Error("Select at least one allowed action.");
       }
@@ -83,7 +96,7 @@ export default function AutopilotNew(): React.ReactElement {
       const result = await client.agent.createSessionPolicy(signer, {
         sessionKey: resolvedSessionKey,
         guardian: resolvedGuardian,
-        recipients: recipientList as Address[],
+        recipients: resolvedAddresses,
         maxPerTx: parseUnits(maxPerTx, 6),
         dailyLimit: parseUnits(dailyLimit, 6),
         weeklyLimit: parseUnits(weeklyLimit, 6),
@@ -101,6 +114,7 @@ export default function AutopilotNew(): React.ReactElement {
         allowNativeQieFallback: gasFallback === "native",
         pauseWhenGasUnavailable: gasFallback === "sponsored-pause",
       }, { mode: gas.mode });
+      setLockedRecipients(resolved);
       setPolicyId(result.policyId);
       setTxHash(result.result?.txHash ?? null);
     } catch (failure) {
@@ -117,6 +131,35 @@ export default function AutopilotNew(): React.ReactElement {
           <div className="section-label">Policy active</div>
           <h2>Autopilot policy created</h2>
           <p className="text-muted mono">{policyId}</p>
+
+          {lockedRecipients.length > 0 && (
+            <div className="tight-stack">
+              <div className="section-label">Locked recipients</div>
+              {lockedRecipients.map((r) => (
+                <div key={r.address} className="surface-card" style={{ padding: "0.6rem 0.75rem" }}>
+                  <div className="flex-between">
+                    <span style={{ fontWeight: 700 }}>{r.displayName ?? r.input}</span>
+                    {r.kind === "qie_domain" && (
+                      <span className={r.verified ? "chip chip-success" : "chip"} style={{ fontSize: "0.65rem" }}>
+                        {r.verified ? "Verified .qie" : "Unverified .qie"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-muted mono" style={{ fontSize: "0.7rem", wordBreak: "break-all" }}>
+                    Locked address: {r.address}
+                  </div>
+                  <div className="text-muted" style={{ fontSize: "0.65rem" }}>
+                    Resolved at: {new Date(r.resolvedAt).toLocaleString()}
+                  </div>
+                </div>
+              ))}
+              <p className="text-muted" style={{ fontSize: "0.75rem" }}>
+                This policy locks the resolved address, not the domain string. If a
+                domain changes later, the policy keeps paying the original address
+                until you update it.
+              </p>
+            </div>
+          )}
           {txHash !== null && (
             <a
               className="history-link"
@@ -155,7 +198,12 @@ export default function AutopilotNew(): React.ReactElement {
             <Field label="Guardian address" value={guardian} onChange={setGuardian} placeholder="0x..." />
           </>
         )}
-        <Field label="Allowed recipients" value={recipients} onChange={setRecipients} placeholder="0x..., 0x..." />
+        <Field label="Allowed recipients" value={recipients} onChange={setRecipients} placeholder="0x..., alice, designer.qie" />
+        <div className="alert alert-info" style={{ fontSize: "0.8rem" }}>
+          Recipients may be addresses, usernames, or <span className="mono">name.qie</span>.
+          Each is resolved now and the policy locks the <strong>resolved address</strong>,
+          not the domain string. A later domain change will not redirect this policy.
+        </div>
 
         <div className="input-group">
           <label className="input-label">Token</label>

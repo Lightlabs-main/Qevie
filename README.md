@@ -6,6 +6,49 @@ Qevie does not make gas disappear — it abstracts it. The first 3 actions per a
 
 ---
 
+## Agent-native QUSDC execution
+
+Qevie is now agent-native: **policies in, autonomous QUSDC execution out.**
+
+Manual send, batch, payment links, requests, QR and subscriptions remain
+available, but they also function as **execution rails** that Autopilot agents can
+call. Users describe what should happen ("Pay designer.qie 10 QUSDC every Friday
+for 4 weeks"), and Qevie maps the command into the correct payment rail while
+smart-account policies enforce exactly what the agent is allowed to execute.
+
+- **Agent Commands** (`/agent`) parse natural language into structured tool plans
+  over the existing rails (`send_qusdc`, `batch_pay_qusdc`, `create_payment_link`,
+  `create_payment_request`, `create_subscription`, `create_receipt`,
+  `read_passport`). Ambiguous input asks for clarification instead of guessing.
+- **Manual Rails** (`/rails`) keep every rail directly usable as a fallback and
+  override path — agents call the same rails internally; no execution logic is
+  duplicated.
+- The on-chain **AgentPolicyManager** remains the enforcement layer: allowed
+  recipients, QUSDC-only execution, per-tx/daily/weekly/total caps, expiry,
+  guardian revoke, and gas behaviour.
+
+> Tell Qevie what should happen. Autopilot chooses the right rail. Smart-account
+> policy enforces the boundary.
+
+## QIE Domain Resolver for agent workflows
+
+Qevie supports QIE Domain resolution across manual and agent-native flows, without
+weakening policy safety.
+
+- For normal payments, `.qie` names are resolved at payment time and the resolved
+  address is shown (and, where the registry supports it, reverse-verified) before
+  you approve.
+- For Autopilot, `.qie` names are resolved **before policy creation** and the
+  **resolved address is stored on-chain**. Existing policies do **not**
+  automatically follow future domain changes — the policy locks the address, not
+  the domain string, preventing silent recipient redirection.
+- Resolution is **optional and honest**: with no resolver configured for a
+  network, `.qie` forward resolution is cleanly unavailable (a clear disabled
+  state) — Qevie never fabricates an address. The verified QIE Domains registry is
+  used for reverse verification only.
+
+---
+
 ## ⭐ Core Features
 
 Qevie has two headline features that make stablecoin payments on QIE feel like a

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import type { UserOpResult } from "@qevie/sdk";
@@ -19,8 +20,21 @@ export default function BatchPay(): React.ReactElement {
   const { signer, address } = useWallet();
   const gasStatus = useGasStatus(client, signer, address);
 
-  const [rows, setRows] = useState<Row[]>([{ to: "", amount: "" }]);
-  const [memo, setMemo] = useState("");
+  // Agent Commands deep-links here with one or more `r=<recipient>:<amount>`
+  // params (recipients pre-resolved upstream). Falls back to one empty row.
+  const [params] = useSearchParams();
+  const prefillRows = params.getAll("r")
+    .map((entry) => {
+      const idx = entry.lastIndexOf(":");
+      if (idx === -1) return null;
+      return { to: entry.slice(0, idx).trim(), amount: entry.slice(idx + 1).trim() };
+    })
+    .filter((r): r is Row => r !== null && r.to !== "");
+
+  const [rows, setRows] = useState<Row[]>(
+    prefillRows.length > 0 ? prefillRows : [{ to: "", amount: "" }],
+  );
+  const [memo, setMemo] = useState(params.get("memo") ?? "");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<UserOpResult | null>(null);
   const [receipts, setReceipts] = useState<CreateReceiptResult[]>([]);

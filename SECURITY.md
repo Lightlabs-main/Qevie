@@ -78,3 +78,37 @@ sponsored tier, accounts must approve the paymaster as part of setup.
 Autopilot must pause when no valid gas route exists, and agents verify the
 account can afford the payment plus the QUSDC gas fee before scheduling, rather
 than submitting failing UserOperations.
+
+## Agent-native execution safety
+
+Agent-native does not mean unrestricted execution.
+
+Autopilot agents can only execute inside AgentPolicyManager limits:
+
+- allowed recipients (stored on-chain as resolved addresses)
+- token restrictions (QUSDC-only)
+- per-tx / daily / weekly / total spend caps
+- expiry
+- gas behaviour (sponsored / QUSDC / native / pause)
+- guardian revocation
+
+Natural-language Agent Commands only ever produce **tool plans** over the
+existing rails; they never bypass policy. In manual-approval mode the user
+approves the previewed rail; in Autopilot mode the action runs only if an
+on-chain policy already allows the resolved recipient and amount. Manual payment
+rails remain available as fallback and override paths.
+
+## QIE Domain Resolver safety
+
+QIE Domains improve UX but do not replace policy enforcement.
+
+- Autopilot resolves `.qie` recipients **before** policy creation and stores the
+  **resolved address** on-chain. If a domain changes later, an existing policy
+  does **not** automatically redirect to the new address. This prevents silent
+  recipient redirection.
+- The Guardian validates resolved addresses; the Executor always pays the address
+  locked on the policy/intent and never re-resolves a domain to override it.
+- Forward resolution is only attempted when a resolver is explicitly configured
+  and is reverse-verified against the registry where possible. With no resolver
+  configured, `.qie` forward resolution is cleanly unavailable — Qevie never
+  fabricates an address, a transaction hash, a receipt, or a resolution.

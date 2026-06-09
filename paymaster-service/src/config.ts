@@ -64,3 +64,12 @@ export const DEX_REFRESH_PRIVATE_KEY = (): string | undefined =>
   process.env["DEX_REFRESH_PRIVATE_KEY"] ?? process.env["TESTNET_PRIVATE_KEY"];
 
 export const QIE_DOMAINS_ADDRESS: Address = "0x26cCB3fABd6db18834987134d715Ba2346CE7223";
+
+/**
+ * Optional forward QIE Domain resolver (name.qie -> address). When unset, `.qie`
+ * forward resolution is cleanly unavailable on the service side (never faked);
+ * reverse verification still works through QIE_DOMAINS_ADDRESS.
+ */
+export const QIE_DOMAIN_RESOLVER_ADDRESS = process.env["QIE_DOMAIN_RESOLVER_ADDRESS"] as
+  | Address
+  | undefined;

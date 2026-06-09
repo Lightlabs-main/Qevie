@@ -218,4 +218,10 @@ export interface QevieClientConfig {
   contracts: import("./contracts.js").QevieContracts;
   /** Default salt for smart account derivation. Defaults to 0. */
   defaultSalt?: bigint;
+  /**
+   * Optional, chain-aware QIE Domain resolution config. When omitted, a config
+   * is derived from `contracts.qieDomainRegistry`/`qieDomainResolver`; with
+   * neither set, `.qie` forward resolution is cleanly unavailable.
+   */
+  qieDomain?: import("./identity/types.js").QieDomainConfig;
 }

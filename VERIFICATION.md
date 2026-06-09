@@ -382,3 +382,41 @@ Paymaster reputation root cause identified in local contract/tests on 2026-06-08
 3. Run full end-to-end gasless transfer: user → bundler RPC → EntryPoint → paymaster → QUSDC transfer.
 
 4. After testnet validation, redeploy on mainnet 1990 and record all addresses here.
+
+---
+
+## QIE Domain Resolver
+
+The QIE Domain Resolver integration is designed to be **optional and honest**: no
+address is fabricated, and `.qie` forward resolution is only performed when a
+resolver is explicitly configured and (where possible) reverse-verified.
+
+| Field | Value |
+|-------|-------|
+| **Component** | QIE Domains registry (reverse verification) |
+| Network | QIE Mainnet (1990) |
+| Address | `0x26cCB3fABd6db18834987134d715Ba2346CE7223` |
+| Source | QIE Domains public app bundle (registry proxy); read-only paths only |
+| Explorer | https://mainnet.qie.digital/address/0x26cCB3fABd6db18834987134d715Ba2346CE7223 |
+| ABI / method | `userDomain(address) → string` (reverse), `domainExist(string) → bool` |
+| Status | **Verified, reverse-only.** Used for reverse verification of resolved addresses and Passport labels. |
+
+| Field | Value |
+|-------|-------|
+| **Component** | QIE Domains forward resolver (name.qie → address) |
+| Network | Mainnet (1990) / Testnet (1983) |
+| Address | _not configured_ (`VITE_QIE_DOMAIN_RESOLVER_*`, `QIE_DOMAIN_RESOLVER_ADDRESS`) |
+| Source | — |
+| Explorer | — |
+| ABI / method | ENS-like forward probe (`resolve` / `getAddress` / `addr` / …), or a custom function name |
+| Status | **Disabled until a forward resolver is deployed and explorer-verified.** While unset, `.qie` forward resolution is cleanly unavailable; nothing is faked. |
+
+Safety notes:
+
+- Autopilot policies store the **resolved address** on-chain (the AgentPolicyManager
+  only ever accepts `address[]`, never a domain string), so existing policies
+  never follow later domain changes.
+- The paymaster-service `/resolve-recipient` endpoint is **preview-only**; the
+  executor pays the locked policy address and never re-resolves a domain.
+- Only set `VITE_QIE_DOMAIN_RESOLVER_*` / `QIE_DOMAIN_RESOLVER_ADDRESS` after the
+  resolver contract and its forward method are explorer-verified and recorded here.

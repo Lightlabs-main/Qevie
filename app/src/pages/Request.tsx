@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import { buildPaymentUri } from "@qevie/sdk";
@@ -17,9 +18,10 @@ export default function Request(): React.ReactElement {
   const { address, signer } = useWallet();
   const gasStatus = useGasStatus(client, signer, address);
 
-  const [from, setFrom] = useState("");
-  const [amount, setAmount] = useState("");
-  const [memo, setMemo] = useState("");
+  const [params] = useSearchParams();
+  const [from, setFrom] = useState(params.get("from") ?? "");
+  const [amount, setAmount] = useState(params.get("amount") ?? "");
+  const [memo, setMemo] = useState(params.get("memo") ?? "");
   const [step, setStep] = useState<Step>("form");
   const [payUri, setPayUri] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);

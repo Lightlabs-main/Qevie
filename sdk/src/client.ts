@@ -26,6 +26,13 @@ import { GasModule, type AutopilotGasDecision } from "./gas.js";
 import { QevieAccount } from "./account.js";
 import { BundlerClient } from "./bundler.js";
 import { resolveRecipient } from "./resolve.js";
+import {
+  resolveRecipientDetailed,
+  createResolverAdapter,
+  type ResolveRecipientResult,
+  type QieDomainConfig,
+  type QieDomainResolverAdapter,
+} from "./identity/index.js";
 import { buildPaymentUri, parsePaymentUri, buildShareUrl } from "./links.js";
 import { hashReceiptMetadata } from "./receipts.js";
 import type {
@@ -100,12 +107,17 @@ export class QevieClient {
   };
   /** Sustainable gas model decision layer (sponsored / QUSDC / native / paused). */
   readonly gas: GasModule;
+  /** Effective QIE Domain config (explicit, or derived from contract addresses). */
+  readonly qieDomainConfig: QieDomainConfig;
+  private readonly resolverAdapter: QieDomainResolverAdapter;
 
   constructor(config: QevieClientConfig) {
     this.config = config;
     this.publicClient = createPublicClient({
       transport: http(config.rpcUrl),
     }) as AnyPublicClient;
+    this.qieDomainConfig = config.qieDomain ?? deriveQieDomainConfig(config);
+    this.resolverAdapter = createResolverAdapter(this.publicClient, this.qieDomainConfig);
     this.bundler = new BundlerClient(config.bundlerUrl);
     this.receipts = {
       createReceipt: this.createReceipt.bind(this),
@@ -409,7 +421,25 @@ export class QevieClient {
       this.publicClient,
       this.config.contracts,
       recipient,
+      this.qieDomainConfig.registry,
     );
+  }
+
+  /**
+   * Resolve a recipient into a typed, source-tagged result (address /
+   * `name.qie` / username). Use this for agent and policy flows that need to
+   * know HOW a recipient resolved and whether it was verified. `.qie` forward
+   * resolution is only attempted when a resolver is configured — otherwise a
+   * clean "resolver not configured" failure is returned (never a fabricated
+   * address).
+   */
+  async resolveDetailed(recipient: string): Promise<ResolveRecipientResult> {
+    return resolveRecipientDetailed(recipient, {
+      client: this.publicClient,
+      contracts: this.config.contracts,
+      domainConfig: this.qieDomainConfig,
+      adapter: this.resolverAdapter,
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -962,6 +992,22 @@ export class QevieClient {
       }),
     };
   }
+}
+
+/**
+ * Derive a QIE Domain config from contract addresses when none is passed
+ * explicitly. Forward resolution is only enabled when a resolver address is
+ * present; otherwise reverse verification still works if a registry is set.
+ */
+function deriveQieDomainConfig(config: QevieClientConfig): QieDomainConfig {
+  const registry = config.contracts.qieDomainRegistry;
+  const resolver = config.contracts.qieDomainResolver;
+  return {
+    enabled: resolver !== undefined || registry !== undefined,
+    ...(resolver !== undefined ? { resolver } : {}),
+    ...(registry !== undefined ? { registry } : {}),
+    resolverType: resolver !== undefined ? "ens_like" : "disabled",
+  };
 }
 
 const zeroHash = `0x${"0".repeat(64)}` as Hex;

@@ -22,6 +22,7 @@ import { issueReceipt } from "./receipts.js";
 import { provisionSessionKey } from "./session-keys.js";
 import { createValidatedIntent, startAutopilotExecutor } from "./autopilot-executor.js";
 import { cancelIntent, listIntents } from "./autopilot-intents.js";
+import { resolveRecipientForPreview } from "./identity/resolve-recipient.js";
 
 async function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -171,6 +172,26 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
       json(res, 200, { ok: true });
     } catch (e) {
       console.error("[api] /autopilot/cancel error:", e);
+      json(res, 500, { error: "Internal error" });
+    }
+    return;
+  }
+
+  // Recipient resolution PREVIEW (incl. .qie). This is preview-only: the
+  // Autopilot executor always pays the address locked on the policy/intent and
+  // never re-resolves a domain to override it.
+  if (req.url === "/resolve-recipient" && req.method === "POST") {
+    try {
+      const raw = await readBody(req);
+      const body = JSON.parse(raw) as { recipient?: string };
+      if (typeof body.recipient !== "string" || body.recipient.trim() === "") {
+        json(res, 400, { error: "recipient required" });
+        return;
+      }
+      const result = await resolveRecipientForPreview(body.recipient);
+      json(res, 200, result);
+    } catch (e) {
+      console.error("[api] /resolve-recipient error:", e);
       json(res, 500, { error: "Internal error" });
     }
     return;

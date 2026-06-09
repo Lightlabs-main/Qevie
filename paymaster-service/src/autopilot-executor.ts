@@ -118,7 +118,7 @@ async function resolveSessionGasMode(
   smartAccount: Address,
 ): Promise<{ mode: GasMode; allowlistToken?: AllowlistToken } | null> {
   if (policy.allowSponsoredGas) {
-    let freeOps = 0;
+    let freeOps: number;
     try {
       freeOps = Number(await publicClient.readContract({
         address: CONTRACTS.paymaster,

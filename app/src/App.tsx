@@ -4,6 +4,10 @@ import BottomNav from "./components/BottomNav.js";
 import { useWallet } from "./hooks/useWallet.js";
 
 const Home = lazy(() => import("./pages/Home.js"));
+const ControlCenter = lazy(() => import("./pages/ControlCenter.js"));
+const AgentCommands = lazy(() => import("./pages/AgentCommands.js"));
+const ManualRails = lazy(() => import("./pages/ManualRails.js"));
+const Request = lazy(() => import("./pages/Request.js"));
 const Send = lazy(() => import("./pages/Send.js"));
 const PaymentLinks = lazy(() => import("./pages/PaymentLinks.js"));
 const Scan = lazy(() => import("./pages/Scan.js"));
@@ -50,7 +54,14 @@ export default function App(): React.ReactElement {
       <div className="app-container page-center">
         <Suspense fallback={<LoadingPage />}>
           <Routes>
-            <Route path="/" element={<Home />} />
+            {/* Agent-native control center is the primary surface. */}
+            <Route path="/" element={<ControlCenter />} />
+            <Route path="/wallet" element={<Home />} />
+            <Route path="/home" element={<Home />} />
+            <Route path="/agent" element={<AgentCommands />} />
+            <Route path="/agent/commands" element={<AgentCommands />} />
+            <Route path="/rails" element={<ManualRails />} />
+            <Route path="/request" element={<Request />} />
             <Route path="/send" element={<Send />} />
             <Route path="/links" element={<PaymentLinks />} />
             <Route path="/scan" element={<Scan />} />

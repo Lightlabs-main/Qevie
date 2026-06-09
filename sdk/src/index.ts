@@ -30,6 +30,77 @@ export { buildPaymentUri, parsePaymentUri, buildShareUrl } from "./links.js";
 
 // Name resolution
 export { resolveRecipient } from "./resolve.js";
+
+// QIE Domain Resolver / recipient identity (agent-native + manual flows)
+export {
+  resolveRecipientDetailed,
+  createResolverAdapter,
+  DisabledQieResolverAdapter,
+  EnsLikeQieResolverAdapter,
+  CustomQieResolverAdapter,
+  isQieDomain,
+  normalizeName,
+  stripQieSuffix,
+  reverseLookupQieDomain,
+  verifyDomainOwnership,
+  qieDomainExists,
+} from "./identity/index.js";
+export type {
+  QieDomainConfig,
+  QieDomainResolverAdapter,
+  RecipientKind,
+  RecipientSource,
+  ResolvedRecipient,
+  ResolveFailure,
+  ResolveFailureReason,
+  ResolveRecipientResult,
+  ResolveRecipientDeps,
+} from "./identity/index.js";
+
+// Agent-native intent parsing + tool registry
+export {
+  parseAgentCommand,
+  validateIntent,
+  isActionable,
+  PERIOD_SECONDS,
+  AGENT_TOOLS,
+  toolForIntent,
+  planToolsForIntent,
+  sendTool,
+  batchTool,
+  linkTool,
+  requestTool,
+  subscriptionTool,
+  receiptTool,
+  passportTool,
+} from "./agent/index.js";
+export type {
+  AgentIntent,
+  SingleIntent,
+  SendIntent,
+  BatchIntent,
+  BatchPayment,
+  PaymentLinkIntent,
+  PaymentRequestIntent,
+  SubscriptionIntent,
+  MultiStepIntent,
+  ClarificationNeeded,
+  ParseResult,
+  RecurrencePeriod,
+  ValidationResult,
+  AgentToolName,
+  AgentToolContext,
+  AgentToolStatus,
+  AgentToolResult,
+  AgentTool,
+  SendToolInput,
+  BatchToolInput,
+  LinkToolInput,
+  RequestToolInput,
+  SubscriptionToolInput,
+  ReceiptToolInput,
+  PassportToolInput,
+} from "./agent/index.js";
 export { stableStringify, hashReceiptMetadata } from "./receipts.js";
 export { AGENT_POLICY_MANAGER_ABI } from "./agent/index.js";
 export type {

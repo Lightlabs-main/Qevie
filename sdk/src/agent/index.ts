@@ -6,3 +6,7 @@ export type {
   CreateAgentPolicyResult,
   SessionPaymentInput,
 } from "./types.js";
+
+// Agent-native: natural-language intent parsing + tool registry over existing rails.
+export * from "./intent/index.js";
+export * from "./tools/index.js";

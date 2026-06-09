@@ -43,14 +43,15 @@ export default function Autopilot(): React.ReactElement {
       </div>
 
       <section className="glass-card autopilot-hero">
-        <h3>Scoped payment authority, not wallet custody.</h3>
+        <h3>Agent-native QUSDC execution on QIE.</h3>
         <p className="text-muted">
-          Qevie Autopilot lets scoped agents execute QUSDC payments from your smart
-          account only inside limits you set on-chain.
+          Create policies once, then let scoped agents execute payment workflows
+          inside smart-account limits. Payment links, batch, requests, QR, and
+          subscriptions become rails Autopilot can call — manual rails stay available.
         </p>
         <div className="autopilot-actions">
-          <Link className="btn btn-primary" to="/autopilot/new">Create policy</Link>
-          <Link className="btn btn-secondary" to="/autopilot/policies">View policies</Link>
+          <Link className="btn btn-primary" to="/agent">Agent Commands</Link>
+          <Link className="btn btn-secondary" to="/autopilot/new">Create policy</Link>
         </div>
       </section>
 

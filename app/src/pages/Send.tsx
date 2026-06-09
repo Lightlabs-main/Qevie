@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import type { UserOpResult } from "@qevie/sdk";
-import type { CreateReceiptResult } from "@qevie/sdk";
+import type { CreateReceiptResult, ResolvedRecipient } from "@qevie/sdk";
 import { APP_CONFIG } from "../config.js";
 import { gaslessParams } from "../lib/gasless.js";
 import { useGasStatus } from "../lib/useGasStatus.js";
@@ -33,6 +33,7 @@ export default function Send(): React.ReactElement {
   const [receiptError, setReceiptError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resolvedAddr, setResolvedAddr] = useState<string | null>(null);
+  const [resolvedInfo, setResolvedInfo] = useState<ResolvedRecipient | null>(null);
   const [resolving, setResolving] = useState(false);
   const gasStatus = useGasStatus(client, signer, address);
 
@@ -83,12 +84,13 @@ export default function Send(): React.ReactElement {
     setError(null);
     setResolving(true);
     try {
-      const addr = await client.resolve(to.trim());
-      if (addr === null) {
-        setError(`Cannot resolve "${to}". Try a wallet address or registered username.`);
+      const resolved = await client.resolveDetailed(to.trim());
+      if (!resolved.ok) {
+        setError(resolved.message);
         return;
       }
-      setResolvedAddr(addr);
+      setResolvedAddr(resolved.address);
+      setResolvedInfo(resolved);
       setStep("confirm");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Resolution failed");
@@ -290,6 +292,18 @@ export default function Send(): React.ReactElement {
               {resolvedAddr}
             </span>
           </div>
+          {resolvedInfo !== null && resolvedInfo.source !== "direct_address" && (
+            <div className="row">
+              <span className="row-label">Resolved</span>
+              <span className="row-value" style={{ fontSize: "0.75rem" }}>
+                {resolvedInfo.displayName ?? resolvedInfo.input}
+                {" · "}
+                {resolvedInfo.source === "qie_domain_resolver"
+                  ? (resolvedInfo.verified ? "QIE Domain ✓" : "QIE Domain (unverified)")
+                  : "Qevie username"}
+              </span>
+            </div>
+          )}
           <div className="row">
             <span className="row-label">Amount</span>
             <span className="row-value" style={{ color: "var(--accent-light)" }}>
