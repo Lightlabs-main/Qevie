@@ -16,6 +16,7 @@ const now = (): number => 1_700_000_000_000;
 function mockClient(handlers: {
   resolve?: (name: string) => Address;
   userDomain?: (addr: Address) => string;
+  domainInfo?: (fqn: string) => Address;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 }): any {
   return {
@@ -27,6 +28,10 @@ function mockClient(handlers: {
       if (args.functionName === "userDomain") {
         return handlers.userDomain ? handlers.userDomain(args.args[0] as Address) : "";
       }
+      if (args.functionName === "domainInfo") {
+        const owner = handlers.domainInfo ? handlers.domainInfo(args.args[0] as string) : ZERO;
+        return { fqn: args.args[0], zoneAddress: ZERO, owner, mintTime: 0n, tokenId: 0n };
+      }
       throw new Error(`unexpected call ${String(args.functionName)}`);
     },
   };
@@ -36,6 +41,7 @@ function mockClient(handlers: {
 function stubAdapter(name: string, addr: Address): QieDomainResolverAdapter {
   return {
     kind: "custom",
+    authoritative: false,
     async resolve(n: string): Promise<Address | null> {
       return n.toLowerCase() === name ? addr : null;
     },
@@ -114,6 +120,36 @@ describe("resolveRecipientDetailed", () => {
       now,
     });
     // CustomQieResolverAdapter probes the chain mock which throws → null → blocked.
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("domain_not_found");
+  });
+
+  it("forward-resolves a .qie via the canonical QIE Domains registry (domainInfo)", async () => {
+    const client = mockClient({ domainInfo: (fqn) => (fqn === "qevie.qie" ? DESIGNER : ZERO) });
+    const r = await resolveRecipientDetailed("qevie.qie", {
+      client,
+      contracts,
+      domainConfig: { enabled: true, registry: REGISTRY, resolverType: "qie_domains" },
+      now,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.kind).toBe("qie_domain");
+      expect(r.address).toBe(DESIGNER);
+      expect(r.source).toBe("qie_domain_resolver");
+      // Authoritative registry result — verified without a separate reverse check.
+      expect(r.verified).toBe(true);
+    }
+  });
+
+  it("blocks a .qie not registered in the registry (zero owner)", async () => {
+    const client = mockClient({ domainInfo: () => ZERO });
+    const r = await resolveRecipientDetailed("ghost.qie", {
+      client,
+      contracts,
+      domainConfig: { enabled: true, registry: REGISTRY, resolverType: "qie_domains" },
+      now,
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("domain_not_found");
   });

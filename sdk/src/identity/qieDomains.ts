@@ -78,6 +78,39 @@ export async function qieDomainExists(
   }
 }
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+/**
+ * Forward-resolve a fully-qualified `.qie` name to its owner address via the QIE
+ * Domains registry's `domainInfo(fqn)`. This is the canonical forward method
+ * (verified against the QIE Domains app bundle + live registry); a name that is
+ * not registered returns the zero address, which we surface as null.
+ *
+ * `name` may be bare ("alice") or full ("alice.qie"); it is normalized to the
+ * fully-qualified form the registry expects.
+ */
+export async function resolveOwnerViaDomainInfo(
+  client: AnyPublicClient,
+  registry: Address,
+  name: string,
+): Promise<Address | null> {
+  const fqn = `${stripQieSuffix(name)}.qie`;
+  try {
+    const info = (await client.readContract({
+      address: registry,
+      abi: QIE_DOMAINS_ABI,
+      functionName: "domainInfo",
+      args: [fqn],
+    })) as { owner: Address };
+    if (info.owner === undefined || info.owner.toLowerCase() === ZERO_ADDRESS) {
+      return null;
+    }
+    return getAddress(info.owner);
+  } catch {
+    return null;
+  }
+}
+
 /** Checksum an address string, or null if invalid. */
 export function tryChecksum(value: string): Address | null {
   try {

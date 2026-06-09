@@ -1,6 +1,6 @@
 import { type Address, type PublicClient } from "viem";
 import type { QieDomainConfig, QieDomainResolverAdapter } from "./types.js";
-import { stripQieSuffix, tryChecksum } from "./qieDomains.js";
+import { resolveOwnerViaDomainInfo, stripQieSuffix, tryChecksum } from "./qieDomains.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyPublicClient = PublicClient<any, any, any>;
@@ -62,15 +62,36 @@ async function probeForward(
 /** Forward resolution disabled — always null (reverse verification still works). */
 export class DisabledQieResolverAdapter implements QieDomainResolverAdapter {
   readonly kind = "disabled" as const;
+  readonly authoritative = false;
   async resolve(_name: string): Promise<Address | null> {
     void _name;
     return null;
   }
 }
 
+/**
+ * Canonical QIE Domains resolver: reads `domainInfo(fqn).owner` from the verified
+ * QIE Domains registry. Results are authoritative (straight from the registry),
+ * so they need no separate reverse check.
+ */
+export class QieDomainsRegistryAdapter implements QieDomainResolverAdapter {
+  readonly kind = "qie_domains" as const;
+  readonly authoritative = true;
+  constructor(
+    private readonly client: AnyPublicClient,
+    private readonly registry: Address,
+  ) {}
+
+  async resolve(name: string): Promise<Address | null> {
+    if (stripQieSuffix(name) === "") return null;
+    return resolveOwnerViaDomainInfo(this.client, this.registry, name);
+  }
+}
+
 /** Probes a set of ENS-like forward method shapes on a configured resolver. */
 export class EnsLikeQieResolverAdapter implements QieDomainResolverAdapter {
   readonly kind = "ens_like" as const;
+  readonly authoritative = false;
   constructor(
     private readonly client: AnyPublicClient,
     private readonly resolver: Address,
@@ -90,6 +111,7 @@ export class EnsLikeQieResolverAdapter implements QieDomainResolverAdapter {
 /** Calls a single, explicitly-configured forward function on the resolver. */
 export class CustomQieResolverAdapter implements QieDomainResolverAdapter {
   readonly kind = "custom" as const;
+  readonly authoritative = false;
   constructor(
     private readonly client: AnyPublicClient,
     private readonly resolver: Address,
@@ -112,20 +134,32 @@ export function createResolverAdapter(
   client: AnyPublicClient,
   config: QieDomainConfig | undefined,
 ): QieDomainResolverAdapter {
-  if (
-    config === undefined ||
-    !config.enabled ||
-    config.resolverType === "disabled" ||
-    config.resolver === undefined
-  ) {
+  if (config === undefined || !config.enabled || config.resolverType === "disabled") {
     return new DisabledQieResolverAdapter();
   }
+  // Canonical QIE Domains registry method (domainInfo). Preferred whenever a
+  // registry is configured and no separate forward resolver overrides it.
+  if (config.resolverType === "qie_domains") {
+    return config.registry !== undefined
+      ? new QieDomainsRegistryAdapter(client, config.registry)
+      : new DisabledQieResolverAdapter();
+  }
   if (config.resolverType === "custom") {
-    if (config.forwardFunctionName === undefined || config.forwardFunctionName === "") {
+    if (
+      config.resolver === undefined ||
+      config.forwardFunctionName === undefined ||
+      config.forwardFunctionName === ""
+    ) {
       return new DisabledQieResolverAdapter();
     }
     return new CustomQieResolverAdapter(client, config.resolver, config.forwardFunctionName);
   }
-  // Default to ENS-like probing.
-  return new EnsLikeQieResolverAdapter(client, config.resolver);
+  if (config.resolverType === "ens_like" && config.resolver !== undefined) {
+    return new EnsLikeQieResolverAdapter(client, config.resolver);
+  }
+  // No explicit resolver, but a registry is available: use the canonical method.
+  if (config.registry !== undefined) {
+    return new QieDomainsRegistryAdapter(client, config.registry);
+  }
+  return new DisabledQieResolverAdapter();
 }

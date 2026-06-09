@@ -437,6 +437,27 @@ export const QIE_DOMAINS_ABI = [
     outputs: [{ type: "bool" }],
     stateMutability: "view",
   },
+  // Forward resolution. Verified against the QIE Domains app bundle ABI and the
+  // live registry proxy (0x26cC...). Returns the full record for a fully-qualified
+  // name ("alice.qie"); `owner` is the address the domain pays to.
+  {
+    type: "function",
+    name: "domainInfo",
+    inputs: [{ name: "fqn", type: "string" }],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          { name: "fqn", type: "string" },
+          { name: "zoneAddress", type: "address" },
+          { name: "owner", type: "address" },
+          { name: "mintTime", type: "uint256" },
+          { name: "tokenId", type: "uint256" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
 ] as const;
 
 export const PAYMASTER_ABI = [

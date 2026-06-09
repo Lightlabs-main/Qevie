@@ -16,12 +16,14 @@ export interface QieDomainConfig {
   resolver?: Address;
   registry?: Address;
   /**
-   * - `ens_like`: probe a small set of read-only forward method shapes.
+   * - `qie_domains`: use the canonical QIE Domains registry `domainInfo(fqn)`
+   *   forward method (returns the owner address). Uses `registry`.
+   * - `ens_like`: probe a small set of read-only forward method shapes on a
+   *   separate `resolver`.
    * - `custom`: use `forwardFunctionName` against `resolver`.
-   * - `disabled`: never forward-resolve (reverse verification still works if a
-   *   registry is configured).
+   * - `disabled`: never forward-resolve.
    */
-  resolverType?: "ens_like" | "custom" | "disabled";
+  resolverType?: "qie_domains" | "ens_like" | "custom" | "disabled";
   /** For `custom` resolverType: the forward function name on `resolver`. */
   forwardFunctionName?: string;
 }
@@ -73,7 +75,12 @@ export type ResolveRecipientResult =
 
 /** Minimal adapter for forward QIE Domain resolution (name.qie -> address). */
 export interface QieDomainResolverAdapter {
-  readonly kind: "ens_like" | "custom" | "disabled";
-  /** Resolve a bare domain label (without the `.qie` suffix) to an address. */
+  readonly kind: "qie_domains" | "ens_like" | "custom" | "disabled";
+  /**
+   * `true` when results come straight from the canonical QIE Domains registry
+   * and can be treated as verified without a separate reverse check.
+   */
+  readonly authoritative: boolean;
+  /** Resolve a bare or fully-qualified domain name to an address. */
   resolve(name: string): Promise<Address | null>;
 }

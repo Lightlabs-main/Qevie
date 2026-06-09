@@ -1,7 +1,7 @@
 # AGENTS.md — qevie / passpay
 
 Shared conventions for any AI coding agent (Codex, Claude Code, Jules, Cursor, Aider, Zed)
-working in this repo. Read this file fully before doing anything. Then read VERIFICATION.md.
+working in this repo. Read this file fully before doing anything.
 
 ## What this is
 Gasless stablecoin payments app on QIE mainnet (Chain ID 1990) + a TypeScript SDK.
@@ -10,14 +10,14 @@ Full spec lives in the original build prompt; this file is the operating contrac
 
 ## Golden rules (never violate)
 1. VERIFY BEFORE YOU CODE. No contract address is used until it is confirmed on
-   https://mainnet.qie.digital/ and recorded in VERIFICATION.md. Never invent/guess an address.
+   https://mainnet.qie.digital/ and recorded in README.md. Never invent/guess an address.
 2. REAL MAINNET, NO MOCKS in shipped paths. Mocks live only under test/. The deliverable
    runs on chain 1990 with real QUSDC and a real-QIE-funded paymaster.
 3. TESTNET (1983) FOR DEV, MAINNET (1990) FOR DELIVERY.
 4. PAYMASTER = REAL MONEY. Caps, Sybil-gating, scoped sponsorship, reentrancy guards. Always.
 5. ORIGINAL CODE. Reference UX from external apps is fine; copying/forking code is not.
 6. NO SECRETS IN GIT. Use .env (+ .env.example). Never print or commit keys.
-7. If blocked, write it in VERIFICATION.md with the safest labeled fallback. Do not ship a fabricated value.
+7. If blocked, write it in README.md with the safest labeled fallback. Do not ship a fabricated value.
 
 ## Setup
 - Package manager: pnpm. Install: `pnpm install`
@@ -48,7 +48,7 @@ Full spec lives in the original build prompt; this file is the operating contrac
 ## Commits & handoff
 - Conventional Commits (feat:, fix:, chore:, test:, docs:). Small, focused commits.
 - After finishing a phase, update the Status / Handoff block below: what's done, what's next,
-  any new verified addresses (also in VERIFICATION.md), and open blockers.
+  any new verified addresses (also in README.md), and open blockers.
 
 ## Build order (do not reorder)
 Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallback)
@@ -58,7 +58,7 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
 ## Status / Handoff (keep current)
 - Current phase: Testnet gas-mode UX rollout — live sponsored-onboarding, QUSDC-gas, and add-QUSDC states are shown across wallet and payment flows
 - 4337 vs relayer decision: ERC-4337 via Voltaire unsafe/no-trace bundler (direct handleOps smoke test confirmed on testnet)
-- Verified addresses: see VERIFICATION.md
+- Verified addresses: see README.md
 - Open blockers: 
   - Phase 2-3 contracts not yet deployed on testnet (run DeployAll.s.sol with funded key)
   - QIE Pass on-chain gating unavailable; using QIE Domain + signed allowlist fallback

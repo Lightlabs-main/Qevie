@@ -27,7 +27,7 @@ export interface QevieContracts {
 
 /**
  * QIE testnet (1983) contract addresses.
- * All contracts deployed 2026-06-04. See VERIFICATION.md for explorer links.
+ * All contracts deployed 2026-06-04. See README.md for explorer links.
  * Uses testnet stubs: TestQUSDC (mintable), TestDexPair (configurable reserves).
  */
 export const TESTNET_CONTRACTS: QevieContracts = {
@@ -46,7 +46,7 @@ export const TESTNET_CONTRACTS: QevieContracts = {
 
 /**
  * QIE mainnet (1990) contract addresses.
- * Populated after Phase 6 mainnet deploy. See VERIFICATION.md for explorer links.
+ * Populated after Phase 6 mainnet deploy. See README.md for explorer links.
  */
 export const MAINNET_CONTRACTS: QevieContracts = {
   entryPoint: "0xa07d2Ff33400fbE2c741385cb959D5BCbA041493",

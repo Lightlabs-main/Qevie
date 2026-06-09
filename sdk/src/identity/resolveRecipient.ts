@@ -95,10 +95,11 @@ export async function resolveRecipientDetailed(
       };
     }
 
-    // Reverse-verify ownership when a registry is available. A forward result
-    // that the registry does not confirm is returned but flagged unverified.
-    let verified = false;
-    if (registry !== undefined) {
+    // Authoritative adapters (the canonical QIE Domains registry) are trusted as
+    // verified. Otherwise reverse-verify against the registry when available; a
+    // forward result the registry does not confirm is returned but unverified.
+    let verified = adapter.authoritative;
+    if (!verified && registry !== undefined) {
       const owned = await reverseLookupQieDomain(deps.client, registry, forward);
       verified = owned !== null && owned === display;
     }

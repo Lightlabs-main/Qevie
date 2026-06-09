@@ -32,20 +32,23 @@ smart-account policies enforce exactly what the agent is allowed to execute.
 
 ## QIE Domain Resolver for agent workflows
 
-Qevie supports QIE Domain resolution across manual and agent-native flows, without
-weakening policy safety.
+Qevie resolves real `.qie` recipients across manual and agent-native flows,
+without weakening policy safety.
 
-- For normal payments, `.qie` names are resolved at payment time and the resolved
-  address is shown (and, where the registry supports it, reverse-verified) before
-  you approve.
-- For Autopilot, `.qie` names are resolved **before policy creation** and the
-  **resolved address is stored on-chain**. Existing policies do **not**
-  automatically follow future domain changes — the policy locks the address, not
-  the domain string, preventing silent recipient redirection.
-- Resolution is **optional and honest**: with no resolver configured for a
-  network, `.qie` forward resolution is cleanly unavailable (a clear disabled
-  state) — Qevie never fabricates an address. The verified QIE Domains registry is
-  used for reverse verification only.
+- **Live forward resolution.** `.qie` names resolve through the verified QIE
+  Domains registry (`0x26cC…7223`) via its canonical `domainInfo(fqn)` method,
+  returning the domain's on-chain `owner`. Confirmed on-chain:
+  `qevie.qie → 0x69eb…54f6`. Unregistered names resolve to nothing and are
+  blocked — Qevie never fabricates an address.
+- **Manual payments.** `.qie` is resolved at payment time and the resolved
+  address (and source) is shown before you approve.
+- **Autopilot.** `.qie` is resolved **before policy creation** and the
+  **resolved address is stored on-chain**. Existing policies do **not** follow
+  future domain changes — the policy locks the address, not the domain string,
+  preventing silent recipient redirection.
+- **Configurable.** Mainnet uses the verified registry by default; a separate
+  ENS-like forward resolver can be set via `VITE_QIE_DOMAIN_RESOLVER_*` /
+  `QIE_DOMAIN_RESOLVER_ADDRESS` to override it.
 
 ---
 

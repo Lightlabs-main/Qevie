@@ -59,7 +59,13 @@ const qieDomain: QieDomainConfig = {
   enabled: qieDomainResolver !== undefined || qieDomainRegistry !== undefined,
   ...(qieDomainResolver !== undefined ? { resolver: qieDomainResolver } : {}),
   ...(qieDomainRegistry !== undefined ? { registry: qieDomainRegistry } : {}),
-  resolverType: qieDomainResolver !== undefined ? "ens_like" : "disabled",
+  // With the verified registry present, the canonical QIE Domains domainInfo()
+  // forward method is used; an explicit forward resolver uses the ENS-like probe.
+  resolverType: qieDomainResolver !== undefined
+    ? "ens_like"
+    : qieDomainRegistry !== undefined
+      ? "qie_domains"
+      : "disabled",
 };
 
 if (!isTestnet) {

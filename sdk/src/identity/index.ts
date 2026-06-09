@@ -14,12 +14,14 @@ export {
   normalizeName,
   stripQieSuffix,
   reverseLookupQieDomain,
+  resolveOwnerViaDomainInfo,
   verifyDomainOwnership,
   qieDomainExists,
 } from "./qieDomains.js";
 
 export {
   DisabledQieResolverAdapter,
+  QieDomainsRegistryAdapter,
   EnsLikeQieResolverAdapter,
   CustomQieResolverAdapter,
   createResolverAdapter,

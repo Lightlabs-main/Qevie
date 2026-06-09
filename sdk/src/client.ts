@@ -1006,7 +1006,9 @@ function deriveQieDomainConfig(config: QevieClientConfig): QieDomainConfig {
     enabled: resolver !== undefined || registry !== undefined,
     ...(resolver !== undefined ? { resolver } : {}),
     ...(registry !== undefined ? { registry } : {}),
-    resolverType: resolver !== undefined ? "ens_like" : "disabled",
+    // A configured registry means the canonical QIE Domains domainInfo() method
+    // is available; an explicit forward resolver uses the ENS-like probe.
+    resolverType: resolver !== undefined ? "ens_like" : registry !== undefined ? "qie_domains" : "disabled",
   };
 }
 

@@ -30,7 +30,9 @@ export function getServiceDomainConfig(): QieDomainConfig {
     enabled: true,
     registry: QIE_DOMAINS_ADDRESS,
     ...(QIE_DOMAIN_RESOLVER_ADDRESS !== undefined ? { resolver: QIE_DOMAIN_RESOLVER_ADDRESS } : {}),
-    resolverType: QIE_DOMAIN_RESOLVER_ADDRESS !== undefined ? "ens_like" : "disabled",
+    // Canonical QIE Domains domainInfo() forward resolution via the verified
+    // registry; an explicit forward resolver overrides with the ENS-like probe.
+    resolverType: QIE_DOMAIN_RESOLVER_ADDRESS !== undefined ? "ens_like" : "qie_domains",
   };
 }
 
