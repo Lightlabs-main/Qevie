@@ -1165,3 +1165,46 @@ a:hover { text-decoration: none; }
 /* Stat tiles / link cards: keep label and value from ever touching. */
 .autopilot-link strong { font-size: 0.95rem; }
 .autopilot-link span { font-size: 0.75rem; line-height: 1.35; }
+
+/* ── Autopilot Activity rows (aligned label/value pairs) ── */
+.activity-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+  font-size: 0.82rem;
+}
+.activity-meta > span:first-child { flex: 0 0 auto; }
+.activity-meta > span:last-child {
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.activity-flow-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-1) 0;
+  border-bottom: 1px solid var(--border);
+}
+.activity-flow-row:last-child { border-bottom: 0; }
+.activity-flow-row > span:first-child { flex: 0 0 auto; }
+.activity-flow-row > span:last-child { min-width: 0; text-align: right; }
+
+.activity-receipt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+}
+
+/* Keep generic status rows' values from misaligning when they wrap. */
+.autopilot-status-row > :last-child {
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
