@@ -325,7 +325,7 @@ export class QevieClient {
     }
     const result = await this.bundler.waitForUserOp(userOpHash, 50, 1000);
     if (result.status === "failed") {
-      throw new Error("Policy UserOperation failed on-chain.");
+      throw new Error("Policy UserOperation failed onchain.");
     }
     return { policyId, userOpHash, result };
   }
