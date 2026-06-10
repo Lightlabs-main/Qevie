@@ -17,6 +17,7 @@ import { type Address, type Hex, isAddress } from "viem";
 import { issueAllowlistToken } from "./allowlist.js";
 import { startKeeper } from "./keeper.js";
 import { startDexHeartbeat } from "./dex-heartbeat.js";
+import { startRebalancer } from "./rebalancer.js";
 import { PORT } from "./config.js";
 import { issueReceipt } from "./receipts.js";
 import { provisionSessionKey } from "./session-keys.js";
@@ -248,9 +249,20 @@ server.listen(PORT, () => {
   console.log(`[paymaster-service] listening on :${PORT}`);
 });
 
+// A single failing background tx (e.g. a signer momentarily out of native QIE)
+// must never take the whole service down. Log and keep the loops running; the
+// rebalancer/operator restores funds on the next tick.
+process.on("unhandledRejection", (reason) => {
+  console.error("[service] unhandledRejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[service] uncaughtException:", err);
+});
+
 startKeeper();
 startAutopilotExecutor();
 startDexHeartbeat();
+startRebalancer();
 
 process.on("SIGTERM", () => {
   server.close(() => process.exit(0));

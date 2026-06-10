@@ -63,6 +63,39 @@ export const CONTRACTS = (CHAIN_ID === 1983 ? TESTNET_CONTRACTS : MAINNET_CONTRA
 export const DEX_REFRESH_PRIVATE_KEY = (): string | undefined =>
   process.env["DEX_REFRESH_PRIVATE_KEY"] ?? process.env["TESTNET_PRIVATE_KEY"];
 
+/**
+ * Paymaster rebalancer.
+ *
+ * Mode A charges accrue QUSDC inside the paymaster while it spends native QIE
+ * sponsoring/fronting gas. To stay solvent that collected QUSDC must be swapped
+ * back into native QIE along the QIEDex WQIE/QUSDC route and used to top the dry
+ * native-QIE sinks (the EntryPoint deposit and the service signer EOA). This
+ * loop closes that economic loop. It uses the paymaster OWNER key (the same key
+ * the heartbeat already uses) because `withdrawQUSDC` is owner-only.
+ *
+ * Safety: disabled-by-default in EXECUTE terms — it only LOGS intended swaps
+ * until REBALANCER_LIVE=true, never swaps dust (MIN_QUSDC), never swaps more
+ * than MAX_QUSDC per run, and only acts when a sink is actually below its floor.
+ */
+export const REBALANCER_ENABLED = process.env["REBALANCER_ENABLED"] !== "false";
+/** When false (default) the loop logs intended actions but executes nothing. */
+export const REBALANCER_LIVE = process.env["REBALANCER_LIVE"] === "true";
+export const REBALANCER_INTERVAL_MS = Number(
+  optionalEnv("REBALANCER_INTERVAL_MS", String(30 * 60_000)),
+);
+/** Slippage tolerance applied to the DEX quote, in basis points (default 2%). */
+export const REBALANCER_SLIPPAGE_BPS = BigInt(optionalEnv("REBALANCER_SLIPPAGE_BPS", "200"));
+/** Never swap less than this much collected QUSDC in one run (6-dec units). */
+export const REBALANCER_MIN_QUSDC = BigInt(optionalEnv("REBALANCER_MIN_QUSDC_UNITS", "1000000")); // 1 QUSDC
+/** Never swap more than this much collected QUSDC in one run (6-dec units). */
+export const REBALANCER_MAX_QUSDC = BigInt(optionalEnv("REBALANCER_MAX_QUSDC_UNITS", "100000000")); // 100 QUSDC
+/** Top the EntryPoint deposit up to TARGET when it drops below FLOOR (wei). */
+export const REBALANCER_EP_FLOOR_WEI = BigInt(optionalEnv("REBALANCER_EP_FLOOR_WEI", "1000000000000000000")); // 1 QIE
+export const REBALANCER_EP_TARGET_WEI = BigInt(optionalEnv("REBALANCER_EP_TARGET_WEI", "3000000000000000000")); // 3 QIE
+/** Keep the service signer EOA above FLOOR, topping up to TARGET (wei). */
+export const REBALANCER_SIGNER_FLOOR_WEI = BigInt(optionalEnv("REBALANCER_SIGNER_FLOOR_WEI", "200000000000000000")); // 0.2 QIE
+export const REBALANCER_SIGNER_TARGET_WEI = BigInt(optionalEnv("REBALANCER_SIGNER_TARGET_WEI", "500000000000000000")); // 0.5 QIE
+
 export const QIE_DOMAINS_ADDRESS: Address = "0x26cCB3fABd6db18834987134d715Ba2346CE7223";
 
 /**
