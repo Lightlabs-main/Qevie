@@ -6,7 +6,7 @@ const FEATURES = [
   {
     icon: "◎",
     label: "Autopilot agents",
-    desc: "Scoped agents execute QUSDC workflows inside on-chain policy limits.",
+    desc: "Scoped agents execute QUSDC workflows inside onchain policy limits.",
   },
   {
     icon: "$",
@@ -16,7 +16,7 @@ const FEATURES = [
   {
     icon: "✦",
     label: "Readable .qie names",
-    desc: "Pay alice.qie. Domains resolve on-chain; policies lock the address.",
+    desc: "Pay alice.qie. Domains resolve onchain; policies lock the address.",
   },
 ];
 
@@ -56,14 +56,14 @@ export default function Onboarding(): React.ReactElement {
 
           <div className="tight-stack" style={{ textAlign: "center", gap: "var(--s-2)" }}>
             <span className="chip chip-accent" style={{ alignSelf: "center" }}>
-              Agent-native PayFi on QIE
+              Agent native PayFi on QIE
             </span>
             <h1 className="text-gradient" style={{ lineHeight: 1.05 }}>
               Policies in.<br />Autonomous QUSDC out.
             </h1>
             <p className="text-muted" style={{ margin: "0 auto", maxWidth: "300px" }}>
               Tell Qevie what should happen. Autopilot picks the rail; your
-              smart-account policy enforces the boundary.
+              smart account policy enforces the boundary.
             </p>
           </div>
         </div>

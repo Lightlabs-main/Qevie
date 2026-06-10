@@ -13,7 +13,7 @@ import {
 } from "../lib/autopilotIntents.js";
 
 const FREQUENCY_OPTIONS: { label: string; intervalSeconds: number | null }[] = [
-  { label: "One-time", intervalSeconds: null },
+  { label: "One time", intervalSeconds: null },
   { label: "Every day", intervalSeconds: 86_400 },
   { label: "Every week", intervalSeconds: 604_800 },
   { label: "Every month", intervalSeconds: 2_592_000 },
@@ -59,7 +59,7 @@ export default function AutopilotPolicies(): React.ReactElement {
     <main className="page fade-in">
       <div className="page-header">
         <div>
-          <div className="section-label">On-chain controls</div>
+          <div className="section-label">Onchain controls</div>
           <h2 className="page-title">Autopilot Policies</h2>
         </div>
         <Link className="btn btn-primary btn-sm" to="/autopilot/new">New</Link>
@@ -227,7 +227,7 @@ function IntentsList({
           )}
           {intent.status === "confirming" && (
             <div className="alert alert-info">
-              Submitted to the bundler and waiting for on-chain confirmation.
+              Submitted to the bundler and waiting for onchain confirmation.
             </div>
           )}
           {intent.lastGasMode !== undefined && (
@@ -266,7 +266,7 @@ function IntentsList({
 }
 
 function scheduleLabel(intent: AutopilotIntent): string {
-  if (intent.intervalSeconds === null) return "One-time";
+  if (intent.intervalSeconds === null) return "One time";
   const everyDays = Math.round(intent.intervalSeconds / 86_400);
   const unit = everyDays === 1 ? "day" : everyDays === 7 ? "week" : everyDays === 30 ? "month" : `${everyDays} days`;
   return `every ${unit} · ${intent.runsCompleted}/${intent.maxRuns} done`;

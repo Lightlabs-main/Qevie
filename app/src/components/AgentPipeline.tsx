@@ -11,10 +11,10 @@ export interface PipelineStage {
  * pipeline reflects reality rather than being a decorative diagram.
  */
 export const AGENT_STAGES: PipelineStage[] = [
-  { name: "Watcher", desc: "Finds due intents and re-reads the policy." },
+  { name: "Watcher", desc: "Finds due intents and reloads the policy." },
   { name: "Strategist", desc: "Composes the workflow and selects the gas mode." },
-  { name: "Guardian", desc: "Enforces on-chain caps, recipient scope, and expiry." },
-  { name: "Executor", desc: "Submits the scoped session-key UserOp." },
+  { name: "Guardian", desc: "Enforces onchain caps, recipient scope, and expiry." },
+  { name: "Executor", desc: "Submits the scoped session key UserOp." },
   { name: "Receipt / Passport", desc: "Writes the audit trail and history." },
 ];
 

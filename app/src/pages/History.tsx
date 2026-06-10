@@ -132,7 +132,7 @@ export default function History(): React.ReactElement {
             <div className="section-label">Live app feed</div>
             <div className="tight-stack">
               {feed.length === 0 ? (
-                <EmptyState label="No recent on-chain app activity yet." />
+                <EmptyState label="No recent onchain app activity yet." />
               ) : (
                 feed.map((item) => (
                   <FeedRow key={item.id} item={item} />

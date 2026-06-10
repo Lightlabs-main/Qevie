@@ -220,7 +220,7 @@ export default function Dashboard(): React.ReactElement {
       // ...and top up the smart account's QIE if it's low, so it can pay its own
       // gas once the 3 free sponsored ops are used up.
       if (smartQie === null || smartQie < QIE_MIN) {
-        setMsg("Confirm the QIE top-up in your wallet…");
+        setMsg("Confirm the QIE top up in your wallet…");
         const qieTx = (await eth.request({
           method: "eth_sendTransaction",
           params: [{ from: signerAddress, to: address, value: `0x${QIE_TOPUP.toString(16)}` }],

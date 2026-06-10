@@ -388,6 +388,90 @@ button,
   text-align: center;
 }
 
+/* Compact 3-up metric row + quick links on the control center. */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-2);
+}
+.quick-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.quick-link {
+  flex: 1 1 auto;
+  text-align: center;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.quick-link:active {
+  color: var(--accent-light);
+  border-color: var(--accent);
+}
+
+/* Wallet summary card on the control center. */
+.wallet-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  text-decoration: none;
+  color: var(--text);
+}
+.wallet-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.wallet-balance {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1;
+}
+.wallet-balance-currency {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.wallet-balance-amount {
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.wallet-balance-unit {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+.wallet-card-address {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+.wallet-card-cta {
+  flex: 0 0 auto;
+  font-size: 1.75rem;
+  line-height: 1;
+  color: var(--text-muted);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+.wallet-card:active .wallet-card-cta {
+  transform: translateX(2px);
+  color: var(--accent-light);
+}
+
 /* Live agent pipeline — stage state reflects real Autopilot activity. */
 .agent-pipeline { display: flex; flex-direction: column; position: relative; }
 .agent-stage {

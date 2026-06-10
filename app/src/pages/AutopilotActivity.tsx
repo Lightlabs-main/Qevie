@@ -117,7 +117,7 @@ export default function AutopilotActivity(): React.ReactElement {
             <div className="section-label">Receipt registry</div>
             {receipts.length === 0 ? (
               <div className="surface-card text-muted" style={{ fontSize: "0.85rem" }}>
-                No on-chain receipts yet.
+                No onchain receipts yet.
               </div>
             ) : (
               receipts.map((r) => <ReceiptRow key={r.receiptId} r={r} />)
@@ -130,10 +130,10 @@ export default function AutopilotActivity(): React.ReactElement {
       <section className="surface-card tight-stack" style={{ marginTop: "var(--s-4)" }}>
         <h3>How a run flows</h3>
         {[
-          ["Watcher", "Finds due intents and re-reads the policy"],
+          ["Watcher", "Finds due intents and reloads the policy"],
           ["Strategist", "Selects the gas mode before submit"],
-          ["Guardian", "Enforces on-chain caps, recipient scope, expiry"],
-          ["Executor", "Submits the scoped session-key UserOp"],
+          ["Guardian", "Enforces onchain caps, recipient scope, expiry"],
+          ["Executor", "Submits the scoped session key UserOp"],
           ["Receipt", "Writes the audit trail after settlement"],
         ].map(([label, value]) => (
           <div className="activity-flow-row" key={label}>

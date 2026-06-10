@@ -81,7 +81,7 @@ export default function ControlCenter(): React.ReactElement {
     <main className="page fade-in">
       <div className="page-header">
         <div>
-          <div className="section-label">Agent-native QUSDC execution on QIE</div>
+          <div className="section-label">Agent native QUSDC execution on QIE</div>
           <h2 className="page-title">Qevie Autopilot</h2>
         </div>
         <span className={`chip ${snap.gas?.status === "active" ? "chip-success" : ""}`}>
@@ -89,30 +89,29 @@ export default function ControlCenter(): React.ReactElement {
         </span>
       </div>
 
-      {/* Wallet — balance + quick access. */}
-      <Link to="/wallet" style={{ textDecoration: "none" }}>
-        <section className="glass-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--s-3)" }}>
-          <div>
-            <div className="section-label">Wallet balance</div>
-            <div className="text-gradient" style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1.1 }}>
-              <span style={{ fontSize: "0.55em", opacity: 0.4, marginRight: 2 }}>$</span>
-              {snap.balance === null ? "—" : fmtUsd(snap.balance)}
-            </div>
-            {address !== null && (
-              <div className="text-muted mono" style={{ fontSize: "0.7rem", marginTop: "0.25rem" }}>
-                {short(address)} · QUSDC
-              </div>
-            )}
+      {/* Wallet: balance and quick access. */}
+      <Link to="/wallet" className="glass-card wallet-card">
+        <div className="wallet-card-main">
+          <span className="section-label">Available balance</span>
+          <div className="wallet-balance">
+            <span className="wallet-balance-currency">$</span>
+            <span className="wallet-balance-amount text-gradient">
+              {snap.balance === null ? "0.00" : fmtUsd(snap.balance)}
+            </span>
+            <span className="wallet-balance-unit">QUSDC</span>
           </div>
-          <span className="btn btn-secondary" style={{ flexShrink: 0 }}>Open wallet →</span>
-        </section>
+          {address !== null && (
+            <span className="wallet-card-address mono">{short(address)}</span>
+          )}
+        </div>
+        <span className="wallet-card-cta" aria-hidden="true">›</span>
       </Link>
 
       <section className="glass-card autopilot-hero" style={{ marginTop: "var(--s-4)" }}>
         <h3>Policies in. Autonomous QUSDC execution out.</h3>
         <p className="text-muted">
           Create policies once, then let scoped agents execute payment workflows
-          inside smart-account limits.
+          inside smart account limits.
         </p>
         <div className="autopilot-actions">
           <Link className="btn btn-primary" to="/agent">Agent Commands</Link>
@@ -120,21 +119,27 @@ export default function ControlCenter(): React.ReactElement {
         </div>
       </section>
 
-      <section className="tight-grid" style={{ marginTop: "var(--s-4)" }}>
-        <Stat label="Active Policies" value={String(snap.activePolicies)} to="/autopilot/policies" />
-        <Stat label="Session Keys" value={String(snap.sessionKeys)} to="/autopilot/policies" />
+      <section className="stat-row" style={{ marginTop: "var(--s-4)" }}>
+        <Stat label="Active policies" value={String(snap.activePolicies)} to="/autopilot/policies" />
+        <Stat label="Session keys" value={String(snap.sessionKeys)} to="/autopilot/policies" />
         <Stat
-          label="Gas Route Status"
-          value={snap.gas === null ? "—" : snap.gas.status === "active" ? "Ready" : "Paused"}
+          label="Gas route"
+          value={snap.gas === null ? "…" : snap.gas.status === "active" ? "Ready" : "Paused"}
           to="/autopilot"
         />
-        <Stat label="Due Obligations" value="View" to="/subscriptions" />
-        <Stat label="Pending Agent Commands" value="Open" to="/agent" />
-        <Stat label="Guardian Checks" value="Policies" to="/autopilot/policies" />
-        <Stat label="Recent UserOps" value="Activity" to="/autopilot/activity" />
-        <Stat label="ReceiptRegistry Logs" value="History" to="/history" />
-        <Stat label="Passport Updates" value="Passport" to="/passport" />
       </section>
+
+      <nav className="quick-links" style={{ marginTop: "var(--s-3)" }}>
+        {([
+          ["Activity", "/autopilot/activity"],
+          ["Policies", "/autopilot/policies"],
+          ["Subscriptions", "/subscriptions"],
+          ["History", "/history"],
+          ["Passport", "/passport"],
+        ] as const).map(([label, to]) => (
+          <Link key={to} to={to} className="quick-link">{label}</Link>
+        ))}
+      </nav>
 
       {/* Live agent loop — real runs the executor settled, not a static diagram. */}
       <section className="tight-stack" style={{ marginTop: "var(--s-4)" }}>

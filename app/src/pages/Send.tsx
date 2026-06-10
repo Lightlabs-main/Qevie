@@ -154,12 +154,12 @@ export default function Send(): React.ReactElement {
       });
       setConfirming(true);
       setStep("done");
-      // Reconcile the on-chain receipt in the background.
+      // Reconcile the onchain receipt in the background.
       client.bundler
         .waitForUserOp(userOpHash)
         .then(async (res) => {
           if (res.status === "failed") {
-            setError("Payment was submitted but failed on-chain.");
+            setError("Payment was submitted but failed onchain.");
           } else {
             setResult(res);
             if (APP_CONFIG.contracts.receiptRegistry !== undefined && res.txHash !== null) {
@@ -211,14 +211,14 @@ export default function Send(): React.ReactElement {
           {confirmed ? (
             <p className="text-muted">
               {requestId === null
-                ? "Your QUSDC payment was confirmed on-chain."
-                : "Your payment request settlement was confirmed on-chain."}
+                ? "Your QUSDC payment was confirmed onchain."
+                : "Your payment request settlement was confirmed onchain."}
             </p>
           ) : error !== null ? (
             <p className="text-muted">{error}</p>
           ) : confirming ? (
             <p className="text-muted" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-              <span className="spinner" style={{ width: 16, height: 16 }} /> Confirming on-chain…
+              <span className="spinner" style={{ width: 16, height: 16 }} /> Confirming onchain…
             </p>
           ) : (
             <p className="text-muted">Payment was submitted to the network.</p>

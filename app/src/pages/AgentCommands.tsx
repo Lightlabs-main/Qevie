@@ -51,14 +51,14 @@ export default function AgentCommands(): React.ReactElement {
     <main className="page fade-in">
       <div className="page-header">
         <div>
-          <div className="section-label">Agent-native</div>
+          <div className="section-label">Agent native</div>
           <h2 className="page-title">Agent Commands</h2>
         </div>
       </div>
 
       <p className="text-muted" style={{ fontSize: "0.875rem" }}>
         Tell Qevie what should happen. Autopilot chooses the right rail; your
-        smart-account policy enforces the boundary.
+        smart account policy enforces the boundary.
       </p>
 
       <div className="input-group" style={{ marginTop: "var(--s-3)" }}>
@@ -161,7 +161,7 @@ export default function AgentCommands(): React.ReactElement {
 
           <p className="text-muted" style={{ fontSize: "0.75rem" }}>
             Qevie maps the command to a rail. In manual mode you approve it; in
-            Autopilot it runs only if an on-chain policy allows it.
+            Autopilot it runs only if an onchain policy allows it.
           </p>
         </section>
       )}

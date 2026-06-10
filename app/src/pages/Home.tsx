@@ -139,7 +139,7 @@ export default function Home(): React.ReactElement {
         <div className="surface-card" style={{ overflow: "hidden", padding: "var(--s-2)" }}>
           {feed.length === 0 ? (
             <div className="text-muted" style={{ fontSize: "0.8125rem", textAlign: "center", padding: "var(--s-2)" }}>
-              No on-chain app activity yet.
+              No onchain app activity yet.
             </div>
           ) : (
             <div className="history-ticker">

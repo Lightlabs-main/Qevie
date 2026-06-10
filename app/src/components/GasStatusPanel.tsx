@@ -25,7 +25,7 @@ export function GasStatusPanel({
     tone = "info";
   } else if (arming) {
     title = "Setting up USDC gas";
-    detail = "One-time approval so you can pay fees in USDC later…";
+    detail = "One time approval so you can pay fees in USDC later…";
     tone = "info";
   } else if (uiMode === "SPONSORED_ONBOARDING") {
     title = "Sponsored onboarding";

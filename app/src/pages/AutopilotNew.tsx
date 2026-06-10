@@ -20,7 +20,7 @@ export default function AutopilotNew(): React.ReactElement {
   const executionEnabled = APP_CONFIG.autopilotExecutionEnabled;
   const [gasFallback, setGasFallback] = useState<GasFallback>("sponsored-qusdc");
   // Advanced (technical) mode lets a user bring their own session key + guardian.
-  // Default mode provisions the session key server-side and uses the connected
+  // Default mode provisions the session key server side and uses the connected
   // wallet as the guardian, so non-technical users never handle a key.
   const [advanced, setAdvanced] = useState(false);
   const [sessionKey, setSessionKey] = useState("");
@@ -80,7 +80,7 @@ export default function AutopilotNew(): React.ReactElement {
         throw new Error("Add at least one recipient (address, username, or name.qie).");
       }
       // Resolve every recipient (incl. .qie) to a concrete address BEFORE the
-      // policy is signed. The on-chain policy locks the RESOLVED ADDRESS, never
+      // policy is signed. The onchain policy locks the RESOLVED ADDRESS, never
       // the domain string — so a later domain change cannot redirect this policy.
       const resolved = await Promise.all(
         recipientList.map(async (value): Promise<ResolvedRecipient> => {
@@ -101,9 +101,9 @@ export default function AutopilotNew(): React.ReactElement {
         : BigInt(Math.floor(new Date(validAfter).getTime() / 1000));
       if (validUntil === "") throw new Error("Expiry is required.");
       const until = BigInt(Math.floor(new Date(validUntil).getTime() / 1000));
-      if (until <= after || until <= now) throw new Error("Expiry must be after the valid-from time.");
+      if (until <= after || until <= now) throw new Error("Expiry must be after the valid from time.");
 
-      setCreateStage(3); // Executor: submit the policy UserOp on-chain
+      setCreateStage(3); // Executor: submit the policy UserOp onchain
       const gas = await gaslessParams(client, address);
       const result = await client.agent.createSessionPolicy(signer, {
         sessionKey: resolvedSessionKey,

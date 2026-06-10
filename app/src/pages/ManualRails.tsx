@@ -5,14 +5,14 @@ const RAILS = [
   {
     to: "/send",
     name: "Send Rail",
-    desc: "One-off QUSDC transfer outside Autopilot.",
+    desc: "One off QUSDC transfer outside Autopilot.",
     icon: "↑",
     color: "var(--accent)",
   },
   {
     to: "/batch",
     name: "Batch Rail",
-    desc: "Multi-recipient QUSDC execution for agent or manual workflows.",
+    desc: "Multi recipient QUSDC execution for agent or manual workflows.",
     icon: "⇶",
     color: "#f59e0b",
   },
@@ -26,7 +26,7 @@ const RAILS = [
   {
     to: "/scan",
     name: "QR Rail",
-    desc: "Receive or pay through readable mobile-first payment URIs.",
+    desc: "Receive or pay through readable mobile first payment URIs.",
     icon: "▦",
     color: "#a78bfa",
   },

@@ -43,7 +43,6 @@ export default function Autopilot(): React.ReactElement {
   useEffect(() => {
     if (address === null) return;
     let mounted = true;
-    let timer: ReturnType<typeof setInterval>;
     void getAutopilotGasStatus(client, address).then((status) => {
       if (mounted) setGasStatus(status);
     });
@@ -52,8 +51,8 @@ export default function Autopilot(): React.ReactElement {
       if (mounted) setPipeline(derivePipeline(intents));
     };
     void refreshRuns();
-    // Poll so the pipeline reflects the loop acting in near-real-time.
-    timer = setInterval(() => { void refreshRuns(); }, 10_000);
+    // Poll so the pipeline reflects the loop acting in near-real time.
+    const timer = setInterval(() => { void refreshRuns(); }, 10_000);
     return () => { mounted = false; clearInterval(timer); };
   }, [address, client]);
 
@@ -70,10 +69,10 @@ export default function Autopilot(): React.ReactElement {
       </div>
 
       <section className="glass-card autopilot-hero">
-        <h3>Agent-native QUSDC execution on QIE.</h3>
+        <h3>Agent native QUSDC execution on QIE.</h3>
         <p className="text-muted">
           Create policies once, then let scoped agents execute payment workflows
-          inside smart-account limits. Payment links, batch, requests, QR, and
+          inside smart account limits. Payment links, batch, requests, QR, and
           subscriptions become rails Autopilot can call — manual rails stay available.
         </p>
         <div className="autopilot-actions">
