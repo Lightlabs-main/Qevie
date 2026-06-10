@@ -7,8 +7,11 @@ import { useWallet } from "../hooks/useWallet.js";
 import { APP_CONFIG } from "../config.js";
 import { gaslessParams } from "../lib/gasless.js";
 import { provisionSessionKey } from "../lib/sessionKeys.js";
+import AgentPipeline from "../components/AgentPipeline.js";
 
 type GasFallback = "sponsored-qusdc" | "sponsored-pause" | "native";
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 export default function AutopilotNew(): React.ReactElement {
   const client = useQevieClient();
@@ -40,6 +43,9 @@ export default function AutopilotNew(): React.ReactElement {
   const [policyId, setPolicyId] = useState<Hex | null>(null);
   const [txHash, setTxHash] = useState<Hex | null>(null);
   const [lockedRecipients, setLockedRecipients] = useState<ResolvedRecipient[]>([]);
+  // Drives the live Agent pipeline so the user watches the create action move
+  // through the real loop stages (-1 = not started).
+  const [createStage, setCreateStage] = useState(-1);
 
   const createPolicy = async (): Promise<void> => {
     if (signer === null || address === null) {
@@ -48,7 +54,9 @@ export default function AutopilotNew(): React.ReactElement {
     }
     setSubmitting(true);
     setError(null);
+    setCreateStage(0); // Watcher: intake
     try {
+      await sleep(350);
       let resolvedSessionKey: Address;
       let resolvedGuardian: Address;
       if (advanced) {
@@ -63,6 +71,7 @@ export default function AutopilotNew(): React.ReactElement {
         resolvedSessionKey = await provisionSessionKey(address);
         resolvedGuardian = signerAddress ?? address;
       }
+      setCreateStage(1); // Strategist: compose the policy
       const recipientList = recipients
         .split(",")
         .map((value) => value.trim())
@@ -81,6 +90,8 @@ export default function AutopilotNew(): React.ReactElement {
         }),
       );
       const resolvedAddresses = resolved.map((r) => r.address);
+      setCreateStage(2); // Guardian: validate caps/scope + lock resolved addresses
+      await sleep(300);
       if (!allowSingle && !allowBatch && !allowRequest && !allowSubscription) {
         throw new Error("Select at least one allowed action.");
       }
@@ -92,6 +103,7 @@ export default function AutopilotNew(): React.ReactElement {
       const until = BigInt(Math.floor(new Date(validUntil).getTime() / 1000));
       if (until <= after || until <= now) throw new Error("Expiry must be after the valid-from time.");
 
+      setCreateStage(3); // Executor: submit the policy UserOp on-chain
       const gas = await gaslessParams(client, address);
       const result = await client.agent.createSessionPolicy(signer, {
         sessionKey: resolvedSessionKey,
@@ -114,10 +126,12 @@ export default function AutopilotNew(): React.ReactElement {
         allowNativeQieFallback: gasFallback === "native",
         pauseWhenGasUnavailable: gasFallback === "sponsored-pause",
       }, { mode: gas.mode });
+      setCreateStage(4); // Receipt / Passport: policy active, audit trail written
       setLockedRecipients(resolved);
       setPolicyId(result.policyId);
       setTxHash(result.result?.txHash ?? null);
     } catch (failure) {
+      setCreateStage(-1);
       setError(failure instanceof Error ? failure.message : "Policy creation failed.");
     } finally {
       setSubmitting(false);
@@ -131,6 +145,9 @@ export default function AutopilotNew(): React.ReactElement {
           <div className="section-label">Policy active</div>
           <h2>Autopilot policy created</h2>
           <p className="text-muted mono">{policyId}</p>
+
+          <div className="section-label" style={{ marginTop: "var(--s-2)" }}>Agent pipeline</div>
+          <AgentPipeline activeStage={4} live={false} activeLabel="Active" />
 
           {lockedRecipients.length > 0 && (
             <div className="tight-stack">
@@ -253,6 +270,13 @@ export default function AutopilotNew(): React.ReactElement {
           <div className="alert alert-info">Autopilot execution is not enabled for this deployment.</div>
         ) : null}
         {error !== null && <div className="alert alert-error">{error}</div>}
+
+        {submitting && createStage >= 0 && (
+          <section className="surface-card tight-stack">
+            <div className="section-label">Running through the agent pipeline</div>
+            <AgentPipeline activeStage={createStage} live activeLabel="Working" />
+          </section>
+        )}
 
         <button
           className="btn-primary btn-lg"

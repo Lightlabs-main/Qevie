@@ -6,28 +6,55 @@ import {
   getAutopilotGasStatus,
   type AutopilotGasStatus,
 } from "../lib/autopilot.js";
+import AgentPipeline, { AGENT_STAGES } from "../components/AgentPipeline.js";
+import { listIntents, type AutopilotIntent } from "../lib/autopilotIntents.js";
 
-const PIPELINE = [
-  "Watcher",
-  "Reputation Oracle",
-  "Strategist",
-  "Guardian",
-  "Executor",
-  "Receipt / Passport",
-];
+interface PipelineState {
+  /** Index into AGENT_STAGES; -1 = idle. */
+  stage: number;
+  live: boolean;
+  label?: string;
+}
+
+/** Derive which pipeline stage is acting right now from real intent state. */
+function derivePipeline(intents: AutopilotIntent[]): PipelineState {
+  const now = Math.floor(Date.now() / 1000);
+  if (intents.some((i) => i.status === "confirming")) {
+    return { stage: 3, live: true, label: "Submitting" };
+  }
+  if (intents.some((i) => i.status === "scheduled" && i.nextRunAt <= now)) {
+    return { stage: 0, live: true, label: "Due now" };
+  }
+  if (intents.some((i) => i.status === "scheduled")) {
+    return { stage: 0, live: false, label: "Armed" };
+  }
+  if (intents.some((i) => i.status === "completed" || i.lastTxHash !== undefined)) {
+    return { stage: AGENT_STAGES.length - 1, live: false, label: "Settled" };
+  }
+  return { stage: -1, live: false };
+}
 
 export default function Autopilot(): React.ReactElement {
   const client = useQevieClient();
   const { address } = useWallet();
   const [gasStatus, setGasStatus] = useState<AutopilotGasStatus | null>(null);
+  const [pipeline, setPipeline] = useState<PipelineState>({ stage: -1, live: false });
 
   useEffect(() => {
     if (address === null) return;
     let mounted = true;
+    let timer: ReturnType<typeof setInterval>;
     void getAutopilotGasStatus(client, address).then((status) => {
       if (mounted) setGasStatus(status);
     });
-    return () => { mounted = false; };
+    const refreshRuns = async (): Promise<void> => {
+      const intents = await listIntents(address).catch(() => []);
+      if (mounted) setPipeline(derivePipeline(intents));
+    };
+    void refreshRuns();
+    // Poll so the pipeline reflects the loop acting in near-real-time.
+    timer = setInterval(() => { void refreshRuns(); }, 10_000);
+    return () => { mounted = false; clearInterval(timer); };
   }, [address, client]);
 
   return (
@@ -71,19 +98,20 @@ export default function Autopilot(): React.ReactElement {
         </section>
       )}
 
-      <section className="tight-stack">
-        <div className="section-label">Agent pipeline</div>
-        <div className="autopilot-pipeline">
-          {PIPELINE.map((stage, index) => (
-            <React.Fragment key={stage}>
-              <div className="surface-card autopilot-stage">
-                <span>{index + 1}</span>
-                <strong>{stage}</strong>
-              </div>
-              {index < PIPELINE.length - 1 && <div className="pipeline-arrow">↓</div>}
-            </React.Fragment>
-          ))}
+      <section className="surface-card tight-stack">
+        <div className="flex-between">
+          <div className="section-label">Agent pipeline</div>
+          <span className={`chip ${pipeline.live ? "chip-accent" : pipeline.stage >= 0 ? "chip-success" : "chip-muted"}`}>
+            {pipeline.live ? "Running" : pipeline.stage >= 0 ? "Armed" : "Idle"}
+          </span>
         </div>
+        <AgentPipeline activeStage={pipeline.stage} live={pipeline.live} activeLabel={pipeline.label} />
+        {pipeline.stage < 0 && (
+          <p className="text-muted" style={{ fontSize: "0.75rem" }}>
+            The pipeline lights up as the loop acts — create a policy and schedule a
+            payment, then each stage activates through to settlement.
+          </p>
+        )}
       </section>
 
       <section className="tight-grid">
