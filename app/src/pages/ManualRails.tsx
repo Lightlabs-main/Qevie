@@ -79,11 +79,6 @@ export default function ManualRails(): React.ReactElement {
           </Link>
         ))}
       </div>
-
-      <div className="alert alert-info" style={{ marginTop: "var(--s-3)" }}>
-        Manual rails remain available as fallback and override paths. Autopilot
-        executes the same rails inside on-chain smart-account policies.
-      </div>
     </main>
   );
 }

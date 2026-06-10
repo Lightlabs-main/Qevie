@@ -1,43 +1,81 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQevieClient } from "@qevie/sdk/react";
+import { QUSDC_ABI } from "@qevie/sdk";
 import { useWallet } from "../hooks/useWallet.js";
+import { APP_CONFIG } from "../config.js";
 import { getAutopilotGasStatus, type AutopilotGasStatus } from "../lib/autopilot.js";
+import { listIntents, type AutopilotIntent } from "../lib/autopilotIntents.js";
 
-const LOOP = [
-  { name: "Watcher", desc: "finds due obligations." },
-  { name: "Strategist", desc: "composes payment workflows." },
-  { name: "Guardian", desc: "validates policy, risk, gas, and recipient scope." },
-  { name: "Executor", desc: "submits scoped session-key UserOps." },
-  { name: "Receipt / Passport", desc: "writes the audit trail and history." },
-];
+const EXPLORER = APP_CONFIG.chainId === 1990
+  ? "https://mainnet.qie.digital"
+  : "https://testnet.qie.digital";
+
+const RUN_STATUS: Record<AutopilotIntent["status"], { label: string; chip: string }> = {
+  scheduled: { label: "Scheduled", chip: "chip-accent" },
+  confirming: { label: "Confirming", chip: "chip-accent" },
+  completed: { label: "Completed", chip: "chip-success" },
+  failed: { label: "Failed", chip: "chip-error" },
+  cancelled: { label: "Cancelled", chip: "chip-muted" },
+};
 
 interface Snapshot {
   activePolicies: number;
   sessionKeys: number;
   gas: AutopilotGasStatus | null;
+  balance: bigint | null;
+  runs: AutopilotIntent[];
+}
+
+function short(a: string): string {
+  return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+
+function fmtUsd(base: bigint): string {
+  return (Number(base) / 1e6).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function ControlCenter(): React.ReactElement {
   const client = useQevieClient();
   const { address } = useWallet();
-  const [snap, setSnap] = useState<Snapshot>({ activePolicies: 0, sessionKeys: 0, gas: null });
+  const [snap, setSnap] = useState<Snapshot>({
+    activePolicies: 0,
+    sessionKeys: 0,
+    gas: null,
+    balance: null,
+    runs: [],
+  });
 
   useEffect(() => {
     if (address === null) return;
     let mounted = true;
     void (async () => {
-      const [policies, gas] = await Promise.all([
+      const [policies, gas, balance, runs] = await Promise.all([
         client.agent.listSessionPolicies(address).catch(() => []),
         getAutopilotGasStatus(client, address).catch(() => null),
+        client.publicClient.readContract({
+          address: APP_CONFIG.contracts.qusdc,
+          abi: QUSDC_ABI,
+          functionName: "balanceOf",
+          args: [address],
+        }).then((b) => b as bigint).catch(() => null),
+        listIntents(address).catch(() => []),
       ]);
       if (!mounted) return;
       const active = policies.filter((p) => p.active && !p.guardianRevoked);
       const keys = new Set(active.map((p) => p.sessionKey.toLowerCase()));
-      setSnap({ activePolicies: active.length, sessionKeys: keys.size, gas });
+      setSnap({
+        activePolicies: active.length,
+        sessionKeys: keys.size,
+        gas,
+        balance,
+        runs: [...runs].sort((a, b) => b.createdAt - a.createdAt),
+      });
     })();
     return () => { mounted = false; };
   }, [address, client]);
+
+  const recentRuns = snap.runs.slice(0, 4);
 
   return (
     <main className="page fade-in">
@@ -51,11 +89,30 @@ export default function ControlCenter(): React.ReactElement {
         </span>
       </div>
 
-      <section className="glass-card autopilot-hero">
+      {/* Wallet — balance + quick access. */}
+      <Link to="/wallet" style={{ textDecoration: "none" }}>
+        <section className="glass-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--s-3)" }}>
+          <div>
+            <div className="section-label">Wallet balance</div>
+            <div className="text-gradient" style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1.1 }}>
+              <span style={{ fontSize: "0.55em", opacity: 0.4, marginRight: 2 }}>$</span>
+              {snap.balance === null ? "—" : fmtUsd(snap.balance)}
+            </div>
+            {address !== null && (
+              <div className="text-muted mono" style={{ fontSize: "0.7rem", marginTop: "0.25rem" }}>
+                {short(address)} · QUSDC
+              </div>
+            )}
+          </div>
+          <span className="btn btn-secondary" style={{ flexShrink: 0 }}>Open wallet →</span>
+        </section>
+      </Link>
+
+      <section className="glass-card autopilot-hero" style={{ marginTop: "var(--s-4)" }}>
         <h3>Policies in. Autonomous QUSDC execution out.</h3>
         <p className="text-muted">
           Create policies once, then let scoped agents execute payment workflows
-          inside smart-account limits. Manual rails remain available as fallback.
+          inside smart-account limits.
         </p>
         <div className="autopilot-actions">
           <Link className="btn btn-primary" to="/agent">Agent Commands</Link>
@@ -79,25 +136,20 @@ export default function ControlCenter(): React.ReactElement {
         <Stat label="Passport Updates" value="Passport" to="/passport" />
       </section>
 
+      {/* Live agent loop — real runs the executor settled, not a static diagram. */}
       <section className="tight-stack" style={{ marginTop: "var(--s-4)" }}>
-        <div className="section-label">Agent loop</div>
-        <div className="surface-card" style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-          Watcher → Strategist → Guardian → Executor → Receipt / Passport
+        <div className="flex-between">
+          <div className="section-label">Live agent runs</div>
+          <Link className="history-link" to="/autopilot/activity">View all →</Link>
         </div>
-        <div className="autopilot-pipeline">
-          {LOOP.map((stage, i) => (
-            <React.Fragment key={stage.name}>
-              <div className="surface-card autopilot-stage" style={{ alignItems: "flex-start" }}>
-                <span>{i + 1}</span>
-                <div>
-                  <strong>{stage.name}</strong>
-                  <div className="text-muted" style={{ fontSize: "0.7rem" }}>{stage.desc}</div>
-                </div>
-              </div>
-              {i < LOOP.length - 1 && <div className="pipeline-arrow">↓</div>}
-            </React.Fragment>
-          ))}
-        </div>
+        {recentRuns.length === 0 ? (
+          <div className="surface-card text-muted" style={{ fontSize: "0.8rem" }}>
+            No agent runs yet. Create a policy and schedule a payment — each run the
+            executor settles streams here with its status, gas mode, and transaction.
+          </div>
+        ) : (
+          recentRuns.map((run) => <RunRow key={run.id} run={run} />)
+        )}
       </section>
 
       <section className="tight-grid" style={{ marginTop: "var(--s-4)" }}>
@@ -116,6 +168,37 @@ export default function ControlCenter(): React.ReactElement {
         unlimited agent access.
       </div>
     </main>
+  );
+}
+
+function RunRow({ run }: { run: AutopilotIntent }): React.ReactElement {
+  const s = RUN_STATUS[run.status];
+  return (
+    <div className="surface-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--s-2)" }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 700 }}>
+          ${fmtUsd(BigInt(run.amount))} <span className="text-muted" style={{ fontWeight: 500, fontSize: "0.75rem" }}>QUSDC → {short(run.recipient)}</span>
+        </div>
+        <div className="text-muted" style={{ fontSize: "0.7rem", marginTop: "0.2rem" }}>
+          {run.runsCompleted}/{run.maxRuns} runs
+          {run.lastTxHash !== undefined && (
+            <>
+              {" · "}
+              <a
+                href={`${EXPLORER}/tx/${run.lastTxHash}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                style={{ color: "var(--accent-light)" }}
+              >
+                tx
+              </a>
+            </>
+          )}
+        </div>
+      </div>
+      <span className={`chip ${s.chip}`} style={{ flexShrink: 0 }}>{s.label}</span>
+    </div>
   );
 }
 
