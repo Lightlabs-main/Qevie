@@ -26,7 +26,7 @@ forge script script/DeployEntryPoint.s.sol:DeployEntryPoint \
   --broadcast
 ```
 
-Record the EntryPoint address in `VERIFICATION.md`, then deploy the qevie factory:
+Record the EntryPoint address in the root `README.md`, then deploy the qevie factory:
 
 ```sh
 export ENTRYPOINT_ADDRESS=...
@@ -36,4 +36,4 @@ forge script script/DeployFactory.s.sol:DeployFactory \
   --broadcast
 ```
 
-Record the factory address in `VERIFICATION.md`.
+Record the factory address in the root `README.md`.

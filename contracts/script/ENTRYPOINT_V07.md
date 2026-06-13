@@ -10,7 +10,7 @@ Deploy the audited eth-infinitism EntryPoint v0.7 from the official reference re
 2. Install OpenZeppelin Contracts v5.0.0 under `contracts/lib`.
 3. Deploy EntryPoint v0.7.0 to QIE testnet using `script/DeployEntryPoint.s.sol`.
 4. Verify bytecode/source on `https://testnet.qie.digital/`.
-5. Record the address in `VERIFICATION.md`.
+5. Record the address in the root `README.md`.
 6. Export it as `ENTRYPOINT_ADDRESS` before deploying `QevieSmartAccountFactory`.
 
 ## Required Environment

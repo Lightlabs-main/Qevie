@@ -158,9 +158,7 @@ The wallet screen now shows:
 - connected `QIE Wallet` address
 - `Qevie Smart Account` address
 - owner wallet `QUSDC` balance
-- owner wallet native `QIE` balance
 - smart account `QUSDC` balance
-- smart account native `QIE` balance
 - gas sponsorship status
 
 The UI explicitly explains:
@@ -168,6 +166,7 @@ The UI explicitly explains:
 - `QIE Wallet signs`
 - `Qevie Smart Account pays and receives`
 - `Sponsored by Qevie Paymaster`
+- users are not asked to fund the smart account with native QIE
 
 ### Profile
 
@@ -263,7 +262,8 @@ Gas model (`client.gas`):
 - `quoteQusdcGas(smartAccount)` — whether USDC gas is available + the quote
 - `getGasModeOptions(smartAccount)` / `resolveGasMode(...)`
 - `client.ensureQusdcGasReady(signer)` — arm the one-time paymaster approval so
-  USDC gas works after onboarding
+  USDC gas works after onboarding; this setup operation requires sponsored
+  quota and never falls back to asking the user for native QIE
 
 Autopilot (`client.agent`):
 - `createSessionPolicy()`, `listSessionPolicies()`, `getSessionPolicy()`
@@ -292,7 +292,9 @@ Current service responsibilities:
   check, and the unattended executor that settles agent payments
   ([`autopilot-executor.ts`](paymaster-service/src/autopilot-executor.ts),
   [`session-keys.ts`](paymaster-service/src/session-keys.ts))
-- testnet QIEDex price heartbeat so USDC-gas quotes stay fresh
+- QIEDex price heartbeat so USDC-gas quotes stay fresh
+- automatic QUSDC-to-QIE rebalancing to keep the paymaster funded, with
+  configured thresholds and transaction limits
 
 ## Qevie Autopilot — Agentic Payments (built)
 

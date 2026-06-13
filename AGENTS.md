@@ -75,7 +75,7 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
   - Paymaster-first behavior restored: sponsored mint and sponsored policy creation pass again after a clean bundler restart; SDK no longer auto-demotes to `self`
   - Autopilot submitted payments now stay in `confirming` until receipt reconciliation, and the activity page no longer shows placeholder `Pending` labels
   - Paymaster root cause identified locally: Mode B non-signature rejections were returning ERC-4337 `validationData = 1`, which Voltaire classified as `AA34 signature error` and used to ban the paymaster; contract and tests now distinguish real signature failure from policy/budget/target rejects
-  - docs: `docs/QEVIE_AUTOPILOT_IMPLEMENTATION_PLAN.md` added with merged Path B + sustainable gas plan
+  - README.md is the consolidated source for architecture, deployment, verified addresses, and current status
 - Next action: 
   1. Run a live session-key autonomous payment through the running bundler
   2. Implement Autopilot service agents, audit logs, and gas decision flow

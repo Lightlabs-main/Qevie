@@ -33,4 +33,4 @@ After submission, poll `eth_getUserOperationReceipt` and confirm the bundler
 returns the mined receipt promptly. A transaction appearing on-chain is not
 enough to verify the receipt path.
 
-If Voltaire cannot reliably simulate and submit on QIE testnet without tracing, document the result in `VERIFICATION.md` and switch the SDK transport to the EIP-2771 relayer fallback.
+If Voltaire cannot reliably simulate and submit on QIE testnet without tracing, document the result in the root `README.md` and switch the SDK transport to the EIP-2771 relayer fallback.
