@@ -655,7 +655,12 @@ export async function confirmUserRows(jobId: string, input: ConfirmRowsInput): P
       txHash: input.txHash,
       ...(input.userOpHash !== undefined ? { userOpHash: input.userOpHash } : {}),
     });
-    await writeReceiptForRow(jobId, rowIndex, input.receiptType ?? "BATCH_PAYMENT");
+    // Only an actual payment settles into a receipt. Creating a payment request
+    // or a subscription is not itself a payment — its receipts come later (the
+    // subscription keeper issues one per charge).
+    if (intent.type === "pay") {
+      await writeReceiptForRow(jobId, rowIndex, input.receiptType ?? "BATCH_PAYMENT");
+    }
   }
 
   recountJob(jobId);
