@@ -48,6 +48,31 @@ export const AUTOPILOT_INTENT_STORE_PATH = (): string =>
   optionalEnv("AUTOPILOT_INTENT_STORE_PATH", "./data/autopilot-intents.json");
 export const RECEIPT_ISSUER_PRIVATE_KEY = (): string =>
   process.env["RECEIPT_ISSUER_PRIVATE_KEY"] ?? SIGNER_PRIVATE_KEY();
+
+// ---------------------------------------------------------------------------
+// Bulk Intent Import (CSV → policy-checked QUSDC execution)
+// ---------------------------------------------------------------------------
+
+/** JSON store for csv_import_job records. */
+export const CSV_IMPORT_JOB_STORE_PATH = (): string =>
+  optionalEnv("CSV_IMPORT_JOB_STORE_PATH", "./data/csv-import-jobs.json");
+/** JSON store for payment_intent records. */
+export const CSV_IMPORT_INTENT_STORE_PATH = (): string =>
+  optionalEnv("CSV_IMPORT_INTENT_STORE_PATH", "./data/csv-import-intents.json");
+/** Whether the CSV-import Autopilot executor loop runs (session-signed rows). */
+export const CSV_IMPORT_EXECUTOR_ENABLED = process.env["CSV_IMPORT_EXECUTOR_ENABLED"] !== "false";
+/** Poll interval for the CSV-import executor loop, in milliseconds. */
+export const CSV_IMPORT_POLL_INTERVAL_MS = Number(
+  optionalEnv("CSV_IMPORT_POLL_INTERVAL_MS", "15000"),
+);
+/** Duplicate-history lookback window, in hours (default 24). */
+export const CSV_IMPORT_LOOKBACK_HOURS = Number(optionalEnv("CSV_IMPORT_LOOKBACK_HOURS", "24"));
+/** Chunk size for user-path batchPay grouping (clamped to the on-chain cap). */
+export const CSV_IMPORT_BATCH_CHUNK_SIZE = Number(
+  optionalEnv("CSV_IMPORT_BATCH_CHUNK_SIZE", "100"),
+);
+/** Maximum data rows accepted in a single upload. */
+export const CSV_IMPORT_MAX_ROWS = Number(optionalEnv("CSV_IMPORT_MAX_ROWS", "500"));
 export const RECEIPT_REGISTRY_ADDRESS = process.env["RECEIPT_REGISTRY_ADDRESS"] as Address | undefined;
 
 export const CONTRACTS = (CHAIN_ID === 1983 ? TESTNET_CONTRACTS : MAINNET_CONTRACTS) as QevieContracts;

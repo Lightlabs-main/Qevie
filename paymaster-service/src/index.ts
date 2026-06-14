@@ -24,6 +24,15 @@ import { provisionSessionKey } from "./session-keys.js";
 import { createValidatedIntent, startAutopilotExecutor } from "./autopilot-executor.js";
 import { cancelIntent, listIntents } from "./autopilot-intents.js";
 import { resolveRecipientForPreview } from "./identity/resolve-recipient.js";
+import {
+  approveJob,
+  cancelJob,
+  confirmUserRows,
+  createJob,
+  getJobView,
+  resumeJob,
+  startCsvImportExecutor,
+} from "./csv-import.js";
 
 async function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -242,8 +251,152 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
     return;
   }
 
+  // -------------------------------------------------------------------------
+  // Bulk Intent Import (CSV → policy-checked QUSDC execution)
+  // -------------------------------------------------------------------------
+  if (req.url?.startsWith("/csv-import")) {
+    try {
+      await handleCsvImport(req, res);
+    } catch (e) {
+      console.error("[api] /csv-import error:", e);
+      json(res, 400, { error: e instanceof Error ? e.message : "Bulk import error." });
+    }
+    return;
+  }
+
   json(res, 404, { error: "Not found" });
 });
+
+/**
+ * Router for the Bulk Intent Import endpoints. Follows the existing bare-http
+ * conventions (JSON in/out, CORS already set, no auth layer — `uploadedBy` is
+ * informational). Accepts the CSV inline as `csvText`, or base64 as `csvBase64`.
+ */
+async function handleCsvImport(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const url = new URL(req.url ?? "", "http://localhost");
+  const parts = url.pathname.split("/").filter((p) => p !== ""); // ["csv-import", jobId?, action?]
+  const jobId = parts[1];
+  const action = parts[2];
+
+  // POST /csv-import — create a job and run the pipeline through "previewed".
+  if (jobId === undefined && req.method === "POST") {
+    const body = JSON.parse(await readBody(req)) as {
+      fileName?: string;
+      csvText?: string;
+      csvBase64?: string;
+      smartAccount?: string;
+      uploadedBy?: string;
+      source?: string;
+      policyId?: string;
+      allowDuplicateRows?: boolean;
+    };
+    if (typeof body.smartAccount !== "string" || !isAddress(body.smartAccount)) {
+      json(res, 400, { error: "valid smartAccount address required" });
+      return;
+    }
+    const csvText =
+      typeof body.csvText === "string"
+        ? body.csvText
+        : typeof body.csvBase64 === "string"
+          ? Buffer.from(body.csvBase64, "base64").toString("utf8")
+          : undefined;
+    if (csvText === undefined || csvText.trim() === "") {
+      json(res, 400, { error: "csvText or csvBase64 required" });
+      return;
+    }
+    const source = body.source === "autopilot" ? "autopilot" : "user";
+    if (source === "autopilot" && (typeof body.policyId !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(body.policyId))) {
+      json(res, 400, { error: "policyId is required for an Autopilot import" });
+      return;
+    }
+    const job = await createJob({
+      fileName: typeof body.fileName === "string" ? body.fileName : "import.csv",
+      csvText,
+      smartAccount: body.smartAccount as Address,
+      source,
+      allowDuplicateRows: body.allowDuplicateRows === true,
+      ...(typeof body.uploadedBy === "string" && isAddress(body.uploadedBy)
+        ? { uploadedBy: body.uploadedBy as Address }
+        : {}),
+      ...(source === "autopilot" ? { policyId: body.policyId as Hex } : {}),
+    });
+    const view = getJobView(job.jobId);
+    json(res, 200, view);
+    return;
+  }
+
+  if (typeof jobId !== "string") {
+    json(res, 404, { error: "Not found" });
+    return;
+  }
+
+  // GET /csv-import/:jobId
+  if (action === undefined && req.method === "GET") {
+    const view = getJobView(jobId);
+    if (view === undefined) {
+      json(res, 404, { error: "Job not found." });
+      return;
+    }
+    json(res, 200, view);
+    return;
+  }
+
+  if (req.method !== "POST") {
+    json(res, 404, { error: "Not found" });
+    return;
+  }
+
+  // POST /csv-import/:jobId/approve
+  if (action === "approve") {
+    const body = JSON.parse((await readBody(req)) || "{}") as {
+      allowDuplicateRows?: boolean;
+      rowOverrides?: Array<{ rowIndex: number; action: "remove" | "keep" }>;
+    };
+    const result = approveJob(jobId, {
+      ...(typeof body.allowDuplicateRows === "boolean" ? { allowDuplicateRows: body.allowDuplicateRows } : {}),
+      ...(Array.isArray(body.rowOverrides) ? { rowOverrides: body.rowOverrides } : {}),
+    });
+    json(res, 200, result);
+    return;
+  }
+
+  // POST /csv-import/:jobId/confirm — user-signed execution callback.
+  if (action === "confirm") {
+    const body = JSON.parse((await readBody(req)) || "{}") as {
+      rowIndexes?: number[];
+      userOpHash?: string;
+      txHash?: string;
+      receiptType?: "BATCH_PAYMENT" | "SINGLE_PAYMENT" | "PAYMENT_REQUEST_SETTLED" | "SUBSCRIPTION_PAYMENT";
+    };
+    if (!Array.isArray(body.rowIndexes) || body.rowIndexes.length === 0) {
+      json(res, 400, { error: "rowIndexes required" });
+      return;
+    }
+    const job = await confirmUserRows(jobId, {
+      rowIndexes: body.rowIndexes,
+      ...(typeof body.userOpHash === "string" ? { userOpHash: body.userOpHash as Hex } : {}),
+      ...(typeof body.txHash === "string" ? { txHash: body.txHash as Hex } : {}),
+      ...(body.receiptType !== undefined ? { receiptType: body.receiptType } : {}),
+    });
+    json(res, 200, { job });
+    return;
+  }
+
+  // POST /csv-import/:jobId/resume
+  if (action === "resume") {
+    const result = await resumeJob(jobId);
+    json(res, 200, result);
+    return;
+  }
+
+  // POST /csv-import/:jobId/cancel
+  if (action === "cancel") {
+    json(res, 200, { job: cancelJob(jobId) });
+    return;
+  }
+
+  json(res, 404, { error: "Not found" });
+}
 
 server.listen(PORT, () => {
   console.log(`[paymaster-service] listening on :${PORT}`);
@@ -261,6 +414,7 @@ process.on("uncaughtException", (err) => {
 
 startKeeper();
 startAutopilotExecutor();
+startCsvImportExecutor();
 startDexHeartbeat();
 startRebalancer();
 
