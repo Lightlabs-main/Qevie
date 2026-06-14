@@ -9,7 +9,7 @@ import { gaslessParams } from "../lib/gasless.js";
 import { provisionSessionKey } from "../lib/sessionKeys.js";
 import AgentPipeline from "../components/AgentPipeline.js";
 
-type GasFallback = "sponsored-qusdc" | "sponsored-pause" | "native";
+type GasFallback = "sponsored-qusdc" | "sponsored-pause";
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
@@ -121,9 +121,9 @@ export default function AutopilotNew(): React.ReactElement {
         allowBatchPayment: allowBatch,
         allowPaymentRequest: allowRequest,
         allowSubscription,
-        allowSponsoredGas: gasFallback !== "native",
+        allowSponsoredGas: true,
         allowQusdcGas: gasFallback === "sponsored-qusdc",
-        allowNativeQieFallback: gasFallback === "native",
+        allowNativeQieFallback: false,
         pauseWhenGasUnavailable: gasFallback === "sponsored-pause",
       }, { mode: gas.mode });
       setCreateStage(4); // Receipt / Passport: policy active, audit trail written
@@ -251,7 +251,6 @@ export default function AutopilotNew(): React.ReactElement {
           <h3>After sponsored quota is exhausted</h3>
           <SelectOption label="Sponsored then QUSDC Gas" value="sponsored-qusdc" selected={gasFallback} onSelect={setGasFallback} />
           <SelectOption label="Sponsored then pause" value="sponsored-pause" selected={gasFallback} onSelect={setGasFallback} />
-          <SelectOption label="Native QIE only" value="native" selected={gasFallback} onSelect={setGasFallback} />
           <div className="tight-grid">
             <Field label="Max gas per tx" value={maxGas} onChange={setMaxGas} suffix="QUSDC" type="number" />
             <Field label="Daily gas cap" value={dailyGas} onChange={setDailyGas} suffix="QUSDC" type="number" />

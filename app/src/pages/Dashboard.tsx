@@ -4,13 +4,11 @@ import { useQevieClient } from "@qevie/sdk/react";
 import { QUSDC_ABI } from "@qevie/sdk";
 import { useWallet } from "../hooks/useWallet.js";
 import { APP_CONFIG } from "../config.js";
-import { useGasStatus } from "../lib/useGasStatus.js";
+import { gaslessParams } from "../lib/gasless.js";
+import { formatQusdc, useGasStatus } from "../lib/useGasStatus.js";
 import { GasStatusPanel } from "../components/GasStatusPanel.js";
 
 const FAUCET_QUSDC = 100_000_000n; // 100 QUSDC (6 decimals)
-const QIE_TOPUP = 500_000_000_000_000_000n; // 0.5 QIE for the smart account's own gas
-const QIE_MIN = 50_000_000_000_000_000n; // top up only if smart account has < 0.05 QIE
-
 const MINT_ABI = [
   {
     type: "function",
@@ -72,10 +70,10 @@ export default function Dashboard(): React.ReactElement {
   const { address, signer, signerAddress, disconnect } = useWallet();
   const gasStatus = useGasStatus(client, signer, address);
 
-  const [walletQie, setWalletQie] = useState<bigint | null>(null);
   const [walletQusdc, setWalletQusdc] = useState<bigint | null>(null);
-  const [smartQie, setSmartQie] = useState<bigint | null>(null);
   const [smartQusdc, setSmartQusdc] = useState<bigint | null>(null);
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferring, setTransferring] = useState<"deposit" | "withdraw" | null>(null);
   const [minting, setMinting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,10 +88,14 @@ export default function Dashboard(): React.ReactElement {
 
   const short = (value: string | null): string =>
     value === null ? "Not connected" : `${value.slice(0, 8)}...${value.slice(-6)}`;
-  const formatQie = (value: bigint | null): string =>
-    value === null ? "…" : `${(Number(value) / 1e18).toFixed(4)} QIE`;
-  const formatQusdc = (value: bigint | null): string =>
+  const formatBalance = (value: bigint | null): string =>
     value === null ? "…" : `${(Number(value) / 1e6).toFixed(2)} QUSDC`;
+
+  const parseAmountUnits = (): bigint | null => {
+    const parsed = Number.parseFloat(transferAmount);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return BigInt(Math.round(parsed * 1e6));
+  };
 
   const copyAddr = (): void => {
     if (address === null) return;
@@ -104,23 +106,19 @@ export default function Dashboard(): React.ReactElement {
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
-      const [ownerQie, ownerToken, accQie, accToken] = await Promise.all([
-        signerAddress !== null ? client.publicClient.getBalance({ address: signerAddress }) : Promise.resolve(null),
+      const [ownerToken, accToken] = await Promise.all([
         signerAddress !== null
           ? client.publicClient.readContract({
             address: APP_CONFIG.contracts.qusdc, abi: QUSDC_ABI, functionName: "balanceOf", args: [signerAddress],
           })
           : Promise.resolve(null),
-        address !== null ? client.publicClient.getBalance({ address }) : Promise.resolve(null),
         address !== null
           ? client.publicClient.readContract({
             address: APP_CONFIG.contracts.qusdc, abi: QUSDC_ABI, functionName: "balanceOf", args: [address],
           })
           : Promise.resolve(null),
       ]);
-      setWalletQie(ownerQie as bigint | null);
       setWalletQusdc(ownerToken as bigint | null);
-      setSmartQie(accQie as bigint | null);
       setSmartQusdc(accToken as bigint | null);
     } catch { /* leave previous values */ }
   }, [address, signerAddress, client]);
@@ -188,6 +186,83 @@ export default function Dashboard(): React.ReactElement {
 
   const wrongWalletNetwork = walletChainId !== null && walletChainId !== APP_CONFIG.chainId;
 
+  const handleDeposit = async (): Promise<void> => {
+    if (address === null || signerAddress === null) { setError("Wallet not connected"); return; }
+    const eth = (window as typeof window & { ethereum?: Eip1193 }).ethereum;
+    if (eth === undefined) { setError("No wallet provider found"); return; }
+    const amountUnits = parseAmountUnits();
+    if (amountUnits === null) { setError("Enter a valid QUSDC amount."); return; }
+
+    setTransferring("deposit");
+    setError(null);
+    setMsg(null);
+    try {
+      const chainHex = (await eth.request({ method: "eth_chainId" })) as string;
+      const currentChainId = parseInt(chainHex, 16);
+      setWalletChainId(currentChainId);
+      if (currentChainId !== APP_CONFIG.chainId) {
+        setError(`Wallet is on chain ${currentChainId}. Switch to ${TARGET_CHAIN.chainName} (${TARGET_CHAIN.chainId}) to move funds.`);
+        return;
+      }
+
+      const transferTx = (await eth.request({
+        method: "eth_sendTransaction",
+        params: [{
+          from: signerAddress,
+          to: APP_CONFIG.contracts.qusdc,
+          data: encodeFunctionData({
+            abi: QUSDC_ABI,
+            functionName: "transfer",
+            args: [address, amountUnits],
+          }),
+        }],
+      })) as Hex;
+      await client.publicClient.waitForTransactionReceipt({ hash: transferTx });
+
+      setMsg(`Deposited ${formatQusdc(amountUnits)} QUSDC to your smart account.`);
+      setTransferAmount("");
+      await refresh();
+      gasStatus.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Deposit failed");
+    } finally {
+      setTransferring(null);
+    }
+  };
+
+  const handleWithdraw = async (): Promise<void> => {
+    if (address === null || signer === null || signerAddress === null) { setError("Wallet not connected"); return; }
+    const amountUnits = parseAmountUnits();
+    if (amountUnits === null) { setError("Enter a valid QUSDC amount."); return; }
+
+    setTransferring("withdraw");
+    setError(null);
+    setMsg(null);
+    try {
+      const gas = await gaslessParams(client, address);
+      if (gas.uiMode === "NEEDS_QUSDC") {
+        setError(gas.reason ?? "Add QUSDC to your smart account to cover network fees.");
+        return;
+      }
+
+      await client.pay(signer, {
+        to: signerAddress,
+        amount: amountUnits,
+        mode: gas.mode,
+        allowlistToken: gas.allowlistToken,
+      });
+
+      setMsg(`Withdrew ${formatQusdc(amountUnits)} QUSDC back to your connected wallet.`);
+      setTransferAmount("");
+      await refresh();
+      gasStatus.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Withdrawal failed");
+    } finally {
+      setTransferring(null);
+    }
+  };
+
   const handleFaucet = async (): Promise<void> => {
     if (address === null || signerAddress === null) { setError("Wallet not connected"); return; }
     const eth = (window as typeof window & { ethereum?: Eip1193 }).ethereum;
@@ -195,8 +270,6 @@ export default function Dashboard(): React.ReactElement {
 
     setMinting(true); setError(null); setMsg(null);
     try {
-      // The faucet runs as normal transactions from your connected EOA (gas paid
-      // from your QIE), since the smart account can't self-fund its first QIE.
       const chainHex = (await eth.request({ method: "eth_chainId" })) as string;
       const currentChainId = parseInt(chainHex, 16);
       setWalletChainId(currentChainId);
@@ -205,7 +278,6 @@ export default function Dashboard(): React.ReactElement {
         return;
       }
 
-      // Mint mock QUSDC to the smart account...
       setMsg("Confirm the mint in your wallet…");
       const mintTx = (await eth.request({
         method: "eth_sendTransaction",
@@ -216,17 +288,6 @@ export default function Dashboard(): React.ReactElement {
         }],
       })) as Hex;
       await client.publicClient.waitForTransactionReceipt({ hash: mintTx });
-
-      // ...and top up the smart account's QIE if it's low, so it can pay its own
-      // gas once the 3 free sponsored ops are used up.
-      if (smartQie === null || smartQie < QIE_MIN) {
-        setMsg("Confirm the QIE top up in your wallet…");
-        const qieTx = (await eth.request({
-          method: "eth_sendTransaction",
-          params: [{ from: signerAddress, to: address, value: `0x${QIE_TOPUP.toString(16)}` }],
-        })) as Hex;
-        await client.publicClient.waitForTransactionReceipt({ hash: qieTx });
-      }
 
       setMsg("Funded your smart account with 100 test QUSDC ✓");
       await refresh();
@@ -249,8 +310,7 @@ export default function Dashboard(): React.ReactElement {
           </span>
           <span className="chip chip-accent">Gasless</span>
         </div>
-        <p style={{ fontSize: "1.75rem", fontWeight: 800, lineHeight: 1.1 }}>{formatQusdc(smartQusdc)}</p>
-        <p className="text-muted" style={{ marginBottom: "0.85rem", fontSize: "0.85rem" }}>{formatQie(smartQie)}</p>
+        <p style={{ fontSize: "1.75rem", fontWeight: 800, lineHeight: 1.1 }}>{formatBalance(smartQusdc)}</p>
         <div className="flex-between" style={{ gap: "var(--s-3)", marginTop: "var(--s-2)" }}>
           <span className="mono" style={{ fontSize: "0.8125rem", color: "var(--text-2)", opacity: 0.8 }}>{short(address)}</span>
           <div className="flex-center" style={{ gap: "var(--s-1)", flexShrink: 0 }}>
@@ -283,9 +343,93 @@ export default function Dashboard(): React.ReactElement {
             <p className="mono" style={{ fontWeight: 600 }}>{short(signerAddress)}</p>
           </div>
           <p className="text-muted" style={{ fontSize: "0.78rem", textAlign: "right", lineHeight: 1.5 }}>
-            {formatQusdc(walletQusdc)}<br />{formatQie(walletQie)}
+            {formatBalance(walletQusdc)}
           </p>
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: "1rem", display: "grid", gap: "0.85rem" }}>
+        <div className="flex-between" style={{ gap: "0.75rem", alignItems: "flex-start" }}>
+          <div>
+            <p className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.35rem" }}>
+              Wallet Transfer
+            </p>
+            <p style={{ margin: 0, fontWeight: 700 }}>Move QUSDC between your connected wallet and smart account.</p>
+          </div>
+          <span className="chip chip-accent">QUSDC</span>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gap: "0.75rem",
+            padding: "0.9rem",
+            borderRadius: "16px",
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <div className="flex-between" style={{ gap: "0.75rem" }}>
+            <div>
+              <div className="text-muted" style={{ fontSize: "0.74rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>From Wallet</div>
+              <div style={{ fontWeight: 700 }}>{formatBalance(walletQusdc)}</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div className="text-muted" style={{ fontSize: "0.74rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>To Smart Account</div>
+              <div style={{ fontWeight: 700 }}>{formatBalance(smartQusdc)}</div>
+            </div>
+          </div>
+
+          <label style={{ display: "grid", gap: "0.4rem" }}>
+            <span className="text-muted" style={{ fontSize: "0.78rem" }}>Amount</span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.6rem",
+                border: "1px solid var(--border)",
+                borderRadius: "14px",
+                padding: "0.8rem 0.95rem",
+                background: "rgba(255,255,255,0.02)",
+              }}
+            >
+              <input
+                value={transferAmount}
+                onChange={(e) => setTransferAmount(e.target.value)}
+                inputMode="decimal"
+                placeholder="0.00"
+                style={{ border: 0, background: "transparent", padding: 0, margin: 0 }}
+              />
+              <span className="text-muted" style={{ fontSize: "0.82rem", fontWeight: 700 }}>QUSDC</span>
+            </div>
+          </label>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <button
+              className="btn-primary"
+              onClick={() => { void handleDeposit(); }}
+              disabled={transferring !== null || wrongWalletNetwork}
+              style={{ width: "100%" }}
+            >
+              {transferring === "deposit"
+                ? <><span className="spinner" style={{ width: 16, height: 16 }} /> Depositing…</>
+                : "+ Deposit"}
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={() => { void handleWithdraw(); }}
+              disabled={transferring !== null}
+              style={{ width: "100%" }}
+            >
+              {transferring === "withdraw"
+                ? <><span className="spinner" style={{ width: 16, height: 16 }} /> Withdrawing…</>
+                : "- Withdraw"}
+            </button>
+          </div>
+        </div>
+
+        {msg !== null && <p style={{ color: "var(--success, #16a34a)", fontSize: "0.8rem", margin: 0 }}>{msg}</p>}
+        {error !== null && <p style={{ color: "var(--error)", fontSize: "0.8rem", margin: 0 }}>{error}</p>}
       </div>
 
       {/* Testnet faucet */}
@@ -293,7 +437,7 @@ export default function Dashboard(): React.ReactElement {
         <div className="card" style={{ marginBottom: "1rem" }}>
           <div className="flex-between" style={{ marginBottom: "0.75rem" }}>
             <p className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>Testnet faucet</p>
-            <span className="text-muted" style={{ fontSize: "0.75rem" }}>100 QUSDC + gas</span>
+            <span className="text-muted" style={{ fontSize: "0.75rem" }}>100 QUSDC</span>
           </div>
           {wrongWalletNetwork && (
             <div
@@ -339,8 +483,6 @@ export default function Dashboard(): React.ReactElement {
                 : `Switch to ${TARGET_CHAIN.chainName}`}
             </button>
           )}
-          {msg !== null && <p style={{ color: "var(--success, #16a34a)", fontSize: "0.8rem", marginTop: "0.75rem" }}>{msg}</p>}
-          {error !== null && <p style={{ color: "var(--error)", fontSize: "0.8rem", marginTop: "0.75rem" }}>{error}</p>}
         </div>
       )}
 

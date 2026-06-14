@@ -201,8 +201,8 @@ export class QevieClient {
    *
    * Returns `{ armed: true }` when the allowance is in place (already or after a
    * successful op). Returns `{ armed: false, reason }` if no sponsored route is
-   * available to pay for the approval (e.g. mainnet with the free tier off and
-   * the account holding no native QIE) — the caller must surface that.
+   * available. Qevie does not ask payment-app users to bootstrap QUSDC gas with
+   * native QIE.
    */
   async ensureQusdcGasReady(
     signer: QevieSigner,
@@ -221,24 +221,16 @@ export class QevieClient {
     });
     const callData = this._encodeExecute(this.config.contracts.qusdc, 0n, approveData);
 
-    // Prefer a sponsored op so the user pays nothing to arm USDC gas (testnet
-    // onboarding). If the account has no sponsored quota, fall back to self-paid.
     const token = await this.getAllowlistToken(smartAccount);
-    const mode: GasMode = token !== null ? "sponsored" : "self";
-    if (mode === "self") {
-      // Without a sponsored route the account must hold native QIE to arm.
-      // Surface this rather than submitting a doomed op.
-      const bal = await this.publicClient.getBalance({ address: smartAccount });
-      if (bal === 0n) {
-        return {
-          armed: false,
-          alreadyArmed: false,
-          reason: "No sponsored quota and no native QIE to approve the paymaster for USDC gas",
-        };
-      }
+    if (token === null) {
+      return {
+        armed: false,
+        alreadyArmed: false,
+        reason: "Sponsored setup quota is unavailable. Add QUSDC after the paymaster approval is restored.",
+      };
     }
 
-    const userOpHash = await this._submitOpNoWait(acc, callData, mode, token ?? undefined);
+    const userOpHash = await this._submitOpNoWait(acc, callData, "sponsored", token);
     const result = await this.bundler.waitForUserOp(userOpHash);
     return {
       armed: result.status === "mined",
