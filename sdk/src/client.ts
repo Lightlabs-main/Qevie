@@ -500,7 +500,9 @@ export class QevieClient {
       })),
     );
 
-    const batchId = keccak256(toBytes(`${Date.now()}`)) as Hex;
+    // Deterministic id when supplied (Bulk Intent Import); else the legacy
+    // timestamp-derived id so existing callers behave exactly as before.
+    const batchId = params.batchId ?? (keccak256(toBytes(`${Date.now()}`)) as Hex);
     const batchCallData = encodeFunctionData({
       abi: BATCH_PAYMENTS_ABI,
       functionName: "batchPay",

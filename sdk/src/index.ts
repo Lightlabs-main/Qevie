@@ -102,6 +102,54 @@ export type {
   PassportToolInput,
 } from "./agent/index.js";
 export { stableStringify, hashReceiptMetadata } from "./receipts.js";
+
+// Bulk Intent Import (CSV → policy-checked QUSDC execution) — pure helpers
+export {
+  parseCsvRows,
+  normalizeRow,
+  parseQusdcAmount,
+  normalizeMemo,
+  parseSchedule,
+  computeIntentKey,
+  computeContentKey,
+  lowerAddress,
+  detectDuplicates,
+  severityForType,
+  highestSeverity,
+  previewPolicyForRows,
+  deterministicBatchId,
+  chunk,
+  selectExecutableRows,
+  CSV_COLUMNS,
+  MAX_BATCH_RECIPIENTS,
+  DEFAULT_BATCH_CHUNK_SIZE,
+} from "./csv/index.js";
+export type {
+  IntentType,
+  RawCsvRow,
+  ScheduleKind,
+  ScheduleSpec,
+  ScheduleParseResult,
+  NormalizedRow,
+  NormalizeResult,
+  ParseCsvResult,
+  RowError,
+  RowErrorField,
+  AmountParseResult,
+  ContentKeyInput,
+  DuplicateCheck,
+  DuplicateSeverity,
+  DuplicateWarning,
+  DedupeRow,
+  DedupeOptions,
+  PolicyMirror,
+  PolicyPreviewStatus,
+  PolicyPreviewRow,
+  PolicyPreviewResult,
+  IntentStatus,
+  SelectableIntent,
+  SelectOptions,
+} from "./csv/index.js";
 export { AGENT_POLICY_MANAGER_ABI } from "./agent/index.js";
 export type {
   AgentPolicy,

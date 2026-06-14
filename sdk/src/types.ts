@@ -66,6 +66,13 @@ export interface BatchPayParams {
   memo?: string;
   mode?: GasMode;
   allowlistToken?: AllowlistToken;
+  /**
+   * Optional deterministic batch id (e.g. `keccak256(jobId, chunkIndex)`) used
+   * by Bulk Intent Import so a resubmitted chunk produces a stable
+   * `BatchPaid` event id. Defaults to the legacy timestamp-derived id when
+   * omitted — existing callers are unaffected.
+   */
+  batchId?: Hex;
 }
 
 export interface RequestParams {
