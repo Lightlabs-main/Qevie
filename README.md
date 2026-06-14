@@ -160,6 +160,7 @@ The wallet screen now shows:
 - owner wallet `QUSDC` balance
 - smart account `QUSDC` balance
 - gas sponsorship status
+- a **Get USDC** link to [QIEDex](https://www.swap.dex.qie.digital/swap) for topping up QUSDC liquidity
 
 The UI explicitly explains:
 
@@ -207,6 +208,20 @@ The repo also includes:
 - payment request contract + UI flow
 - batch payment contract + UI flow
 - subscription manager contract + keeper-backed execution path
+
+### Bulk CSV Import (batch intents)
+
+The app can turn a spreadsheet into a batch of policy-bound payments:
+
+- upload a `CSV`, `.txt`, or `.xlsx` file of payment intents (`pay`, `request`,
+  `subscription`) with recipient, amount, memo, and optional schedule
+- rows are normalized, deduplicated, and assigned idempotency keys before
+  anything is signed
+- a preview shows the resolved recipients, amounts, and execution plan; you
+  approve once and Autopilot routes every row over the correct rail within your
+  smart-account policy
+- `.qie` names in the file are resolved before execution so the policy locks the
+  address, not the domain string
 
 ## Architecture
 

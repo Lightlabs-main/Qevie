@@ -331,6 +331,33 @@ export default function Dashboard(): React.ReactElement {
         </div>
       </div>
 
+      {/* Get USDC via QIEDex */}
+      <a
+        className="card"
+        href="https://www.swap.dex.qie.digital/swap"
+        target="_blank"
+        rel="noreferrer"
+        style={{
+          marginBottom: "1rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "0.75rem",
+          textDecoration: "none",
+        }}
+      >
+        <div>
+          <p className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.3rem" }}>
+            Need funds?
+          </p>
+          <p style={{ margin: 0, fontWeight: 700 }}>Get USDC on QIEDex</p>
+          <p className="text-muted" style={{ margin: "0.2rem 0 0", fontSize: "0.78rem" }}>
+            Swap for QUSDC liquidity on QIE.
+          </p>
+        </div>
+        <span className="chip chip-accent" style={{ flexShrink: 0 }}>Swap ↗</span>
+      </a>
+
       <div style={{ marginBottom: "1rem" }}>
         <GasStatusPanel status={gasStatus} />
       </div>
