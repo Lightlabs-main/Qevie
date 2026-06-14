@@ -204,7 +204,7 @@ export default function AutopilotNew(): React.ReactElement {
       </div>
 
       <div className="alert alert-info">
-        Autopilot can spend only inside this policy — finite limits and an expiry are required.
+        Autopilot can spend only inside this policy. Finite limits and an expiry are required.
         You can revoke it anytime from your wallet.
       </div>
 

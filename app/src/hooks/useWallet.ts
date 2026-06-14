@@ -130,7 +130,7 @@ function friendlyError(e: unknown): string {
   const code = (e as { code?: number }).code;
   if (code === 4001 || /user rejected|denied/i.test(msg)) return "Connection request was rejected.";
   if (code === -32002 || /already processing|already pending/i.test(msg)) {
-    return "A wallet request is already open — check your wallet, then try again.";
+    return "A wallet request is already open. Check your wallet, then try again.";
   }
   return msg || "Failed to connect wallet";
 }

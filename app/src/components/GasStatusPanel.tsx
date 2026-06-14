@@ -51,7 +51,7 @@ export function GasStatusPanel({
   if (variant === "inline") {
     return (
       <span style={{ color: c.fg, fontSize: 13 }}>
-        {title} — {detail}
+        {title}: {detail}
       </span>
     );
   }

@@ -11,7 +11,7 @@ const FEATURES = [
   {
     icon: "$",
     label: "Gas in USDC",
-    desc: "No native token needed — the paymaster fronts gas, you pay in QUSDC.",
+    desc: "No native token needed. The paymaster fronts gas, you pay in QUSDC.",
   },
   {
     icon: "✦",

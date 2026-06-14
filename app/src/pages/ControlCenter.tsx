@@ -149,7 +149,7 @@ export default function ControlCenter(): React.ReactElement {
         </div>
         {recentRuns.length === 0 ? (
           <div className="surface-card text-muted" style={{ fontSize: "0.8rem" }}>
-            No agent runs yet. Create a policy and schedule a payment — each run the
+            No agent runs yet. Create a policy and schedule a payment. Each run the
             executor settles streams here with its status, gas mode, and transaction.
           </div>
         ) : (

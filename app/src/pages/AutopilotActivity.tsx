@@ -104,7 +104,7 @@ export default function AutopilotActivity(): React.ReactElement {
             <div className="section-label">Agent runs</div>
             {intents.length === 0 ? (
               <div className="surface-card text-muted" style={{ fontSize: "0.85rem" }}>
-                No agent runs yet. Create a policy and schedule a payment — each
+                No agent runs yet. Create a policy and schedule a payment. Each
                 run the executor settles will appear here with its tx and gas mode.
               </div>
             ) : (

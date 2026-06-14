@@ -250,7 +250,7 @@ export default function PaymentLinks(): React.ReactElement {
         <p className="text-muted mt-2" style={{ fontSize: "0.8125rem" }}>
           {mode === "single"
             ? "Generate one shareable payment request link."
-            : "Request different amounts from different people — one link each, all at once."}
+            : "Request different amounts from different people. One link each, all at once."}
         </p>
       </div>
 
@@ -260,7 +260,7 @@ export default function PaymentLinks(): React.ReactElement {
         {/* Recipient */}
         <div className="input-group">
           <label className="input-label">
-            Recipient <span className="text-dim">(optional — leave blank to receive yourself)</span>
+            Recipient <span className="text-dim">(optional, leave blank to receive yourself)</span>
           </label>
           <input
             value={recipient}
@@ -304,7 +304,7 @@ export default function PaymentLinks(): React.ReactElement {
         {/* Max uses */}
         <div className="input-group">
           <label className="input-label">
-            Max uses <span className="text-dim">(optional — how many times the link can be used)</span>
+            Max uses <span className="text-dim">(optional, how many times the link can be used)</span>
           </label>
           <input
             type="number" min="1" step="1"

@@ -115,7 +115,7 @@ export default function Request(): React.ReactElement {
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         <div>
           <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
-            From (optional — leave blank for anyone)
+            From (optional, leave blank for anyone)
           </label>
           <input
             value={from}

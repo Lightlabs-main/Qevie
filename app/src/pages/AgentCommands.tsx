@@ -72,7 +72,7 @@ export default function AgentCommands(): React.ReactElement {
         <div>
           <strong>CSV-to-Autopilot</strong>
           <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-            Have a list? Import a CSV — each row becomes a policy-checked payment.
+            Have a list? Import a CSV. Each row becomes a policy-checked payment.
           </div>
         </div>
         <span className="chip chip-accent" style={{ flexShrink: 0 }}>Import →</span>

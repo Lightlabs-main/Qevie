@@ -73,7 +73,7 @@ export default function Autopilot(): React.ReactElement {
         <p className="text-muted">
           Create policies once, then let scoped agents execute payment workflows
           inside smart account limits. Payment links, batch, requests, QR, and
-          subscriptions become rails Autopilot can call — manual rails stay available.
+          subscriptions become rails Autopilot can call. Manual rails stay available.
         </p>
         <div className="autopilot-actions">
           <Link className="btn btn-primary" to="/agent">Agent Commands</Link>
@@ -107,7 +107,7 @@ export default function Autopilot(): React.ReactElement {
         <AgentPipeline activeStage={pipeline.stage} live={pipeline.live} activeLabel={pipeline.label} />
         {pipeline.stage < 0 && (
           <p className="text-muted" style={{ fontSize: "0.75rem" }}>
-            The pipeline lights up as the loop acts — create a policy and schedule a
+            The pipeline lights up as the loop acts. Create a policy and schedule a
             payment, then each stage activates through to settlement.
           </p>
         )}
