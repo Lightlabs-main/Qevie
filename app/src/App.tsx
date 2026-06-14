@@ -21,6 +21,7 @@ const Developers = lazy(() => import("./pages/Developers.js"));
 const Onboarding = lazy(() => import("./pages/Onboarding.js"));
 const PayLink = lazy(() => import("./pages/PayLink.js"));
 const BatchPay = lazy(() => import("./pages/BatchPay.js"));
+const BulkImport = lazy(() => import("./pages/BulkImport.js"));
 const Autopilot = lazy(() => import("./pages/Autopilot.js"));
 const AutopilotNew = lazy(() => import("./pages/AutopilotNew.js"));
 const AutopilotPolicies = lazy(() => import("./pages/AutopilotPolicies.js"));
@@ -66,6 +67,7 @@ export default function App(): React.ReactElement {
             <Route path="/links" element={<PaymentLinks />} />
             <Route path="/scan" element={<Scan />} />
             <Route path="/batch" element={<BatchPay />} />
+            <Route path="/import" element={<BulkImport />} />
             <Route path="/subscriptions" element={<Subscriptions />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />

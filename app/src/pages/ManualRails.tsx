@@ -17,6 +17,13 @@ const RAILS = [
     color: "#f59e0b",
   },
   {
+    to: "/import",
+    name: "Bulk Intent Import",
+    desc: "Upload a CSV; each row becomes a policy-checked QUSDC payment, deduped and idempotent.",
+    icon: "▤",
+    color: "#f472b6",
+  },
+  {
     to: "/links",
     name: "Payment Link Rail",
     desc: "Create shareable requests that agents can generate from commands.",
