@@ -61,6 +61,23 @@ export default function AgentCommands(): React.ReactElement {
         smart account policy enforces the boundary.
       </p>
 
+      <Link
+        to="/import"
+        className="surface-card"
+        style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          textDecoration: "none", marginTop: "var(--s-3)", gap: "var(--s-2)",
+        }}
+      >
+        <div>
+          <strong>CSV-to-Autopilot</strong>
+          <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+            Have a list? Import a CSV — each row becomes a policy-checked payment.
+          </div>
+        </div>
+        <span className="chip chip-accent" style={{ flexShrink: 0 }}>Import →</span>
+      </Link>
+
       <div className="input-group" style={{ marginTop: "var(--s-3)" }}>
         <textarea
           value={input}

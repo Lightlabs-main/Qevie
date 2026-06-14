@@ -122,6 +122,10 @@ export default function Autopilot(): React.ReactElement {
           <strong>Activity</strong>
           <span className="text-muted">Decisions, gas mode, receipts</span>
         </Link>
+        <Link className="surface-card autopilot-link" to="/import">
+          <strong>CSV-to-Autopilot</strong>
+          <span className="text-muted">Bulk-import rows as policy-checked payments</span>
+        </Link>
       </section>
 
       <div className="alert alert-info">

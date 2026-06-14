@@ -113,6 +113,16 @@ body {
   gap: var(--s-2);
 }
 
+/* Let cells (and intrinsically-wide inputs like datetime-local) shrink to the
+   1fr track instead of overflowing and pushing the columns out of alignment. */
+.tight-grid > * {
+  min-width: 0;
+}
+
+.tight-grid input {
+  min-width: 0;
+}
+
 .flex-center {
   display: flex;
   align-items: center;
