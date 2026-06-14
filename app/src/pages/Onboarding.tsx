@@ -18,6 +18,11 @@ const FEATURES = [
     label: "Readable .qie names",
     desc: "Pay alice.qie. Domains resolve onchain; policies lock the address.",
   },
+  {
+    icon: "⊞",
+    label: "Bulk CSV import",
+    desc: "Drop a CSV, .txt, or .xlsx of payments. Autopilot routes every row within policy.",
+  },
 ];
 
 export default function Onboarding(): React.ReactElement {
