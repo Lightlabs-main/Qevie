@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import { gaslessParams } from "../lib/gasless.js";
+import { isXlsx, xlsxToCsv } from "../lib/xlsx.js";
 import { useGasStatus } from "../lib/useGasStatus.js";
 import { GasStatusPanel } from "../components/GasStatusPanel.js";
 import {
@@ -78,8 +79,15 @@ export default function BulkImport(): React.ReactElement {
   const needsReview = useMemo(() => intents.filter((i) => i.status === "needs_review"), [intents]);
 
   const onFile = async (file: File): Promise<void> => {
+    setError(null);
     setFileName(file.name);
-    setCsvText(await file.text());
+    try {
+      // .xlsx is a zipped-XML workbook → flatten the first sheet to CSV. .csv
+      // and .txt are read as plain text (the parser tolerates either).
+      setCsvText(isXlsx(file) ? await xlsxToCsv(file) : await file.text());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not read that file. Export it as CSV and retry.");
+    }
   };
 
   const handlePreview = async (): Promise<void> => {
@@ -169,10 +177,10 @@ export default function BulkImport(): React.ReactElement {
         </p>
 
         <div className="input-group mb-4">
-          <label className="input-label">CSV file</label>
+          <label className="input-label">CSV, TXT or XLSX file</label>
           <input
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,.txt,.xlsx,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             onChange={(e) => { const f = e.target.files?.[0]; if (f !== undefined) void onFile(f); }}
           />
         </div>

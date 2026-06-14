@@ -50,6 +50,13 @@ subscription,dev.qie,20,Weekly dev,every Friday
   `type`/`recipient`/`amount` columns reject the **whole file**; per-row problems
   never abort the file.
 
+**Accepted upload formats:** `.csv`, `.txt` (read as plain text), and `.xlsx`.
+`.xlsx` is parsed in-browser with a dependency-free reader (`app/src/lib/xlsx.ts`)
+that unzips the workbook via the built-in `DecompressionStream` and flattens the
+first worksheet into CSV before it enters the same pipeline — no SheetJS/zip
+dependency is added. Only text/number cells are read (styles/dates are out of
+scope); if a workbook can't be read, the UI asks the user to export CSV.
+
 ---
 
 ## Pipeline
