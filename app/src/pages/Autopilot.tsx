@@ -8,6 +8,23 @@ import {
 } from "../lib/autopilot.js";
 import AgentPipeline, { AGENT_STAGES } from "../components/AgentPipeline.js";
 import { listIntents, type AutopilotIntent } from "../lib/autopilotIntents.js";
+import { useMyStats } from "../hooks/useProtocolStats.js";
+
+/** Next-due execution label derived from local scheduled intents. */
+function deriveNextDue(intents: AutopilotIntent[]): string | null {
+  const now = Math.floor(Date.now() / 1000);
+  const scheduled = intents
+    .filter((i) => i.status === "scheduled")
+    .map((i) => i.nextRunAt)
+    .sort((a, b) => a - b);
+  if (scheduled.length === 0) return null;
+  const next = scheduled[0]!;
+  if (next <= now) return "Due now";
+  const delta = next - now;
+  if (delta < 3600) return `in ${Math.ceil(delta / 60)}m`;
+  if (delta < 86400) return `in ${Math.ceil(delta / 3600)}h`;
+  return `in ${Math.ceil(delta / 86400)}d`;
+}
 
 interface PipelineState {
   /** Index into AGENT_STAGES; -1 = idle. */
@@ -39,6 +56,8 @@ export default function Autopilot(): React.ReactElement {
   const { address } = useWallet();
   const [gasStatus, setGasStatus] = useState<AutopilotGasStatus | null>(null);
   const [pipeline, setPipeline] = useState<PipelineState>({ stage: -1, live: false });
+  const [nextDue, setNextDue] = useState<string | null>(null);
+  const { data: myStats } = useMyStats(address);
 
   useEffect(() => {
     if (address === null) return;
@@ -48,7 +67,10 @@ export default function Autopilot(): React.ReactElement {
     });
     const refreshRuns = async (): Promise<void> => {
       const intents = await listIntents(address).catch(() => []);
-      if (mounted) setPipeline(derivePipeline(intents));
+      if (mounted) {
+        setPipeline(derivePipeline(intents));
+        setNextDue(deriveNextDue(intents));
+      }
     };
     void refreshRuns();
     // Poll so the pipeline reflects the loop acting in near-real time.
@@ -97,6 +119,28 @@ export default function Autopilot(): React.ReactElement {
         </section>
       )}
 
+      {/* Policy & agent stats for the connected smart account (real indexed data). */}
+      <section className="surface-card tight-stack">
+        <div className="flex-between">
+          <div className="section-label">Policy &amp; agent stats</div>
+          <Link to="/protocol" style={{ fontSize: "0.6875rem", color: "var(--accent-light)", textDecoration: "none", fontWeight: 700 }}>
+            Protocol stats →
+          </Link>
+        </div>
+        <div className="tight-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+          <PolicyStatCell label="Active policies" value={myStats?.activePolicies ?? 0} />
+          <PolicyStatCell label="Pending policies" value={myStats?.pendingPolicies ?? 0} />
+          <PolicyStatCell label="Next due execution" value={nextDue ?? "—"} />
+          <PolicyStatCell label="Agent executions" value={myStats?.autopilotExecutions ?? 0} />
+          <PolicyStatCell label="Guardian vetoes" value={myStats?.blockedActions ?? 0} />
+          <PolicyStatCell label="Revoked policies" value={myStats?.revokedPolicies ?? 0} />
+        </div>
+        <div className="autopilot-status-row">
+          <span className="text-muted">Guardian approvals · Paused state</span>
+          <span className="chip chip-muted" style={{ fontSize: "0.6rem" }}>not emitted on-chain</span>
+        </div>
+      </section>
+
       <section className="surface-card tight-stack">
         <div className="flex-between">
           <div className="section-label">Agent pipeline</div>
@@ -141,6 +185,15 @@ function StatusRow({ label, value }: { label: string; value: string }): React.Re
     <div className="autopilot-status-row">
       <span className="text-muted">{label}</span>
       <strong>{value}</strong>
+    </div>
+  );
+}
+
+function PolicyStatCell({ label, value }: { label: string; value: string | number }): React.ReactElement {
+  return (
+    <div className="surface-card" style={{ padding: "var(--s-2)", display: "flex", flexDirection: "column", gap: 2 }}>
+      <span className="text-muted" style={{ fontSize: "0.6875rem" }}>{label}</span>
+      <strong style={{ fontSize: "1.0625rem", color: "var(--text-pure)" }}>{value}</strong>
     </div>
   );
 }

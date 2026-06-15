@@ -852,6 +852,39 @@ button,
   }
 }
 
+/* Protocol live-feed rows: subtle fade-in as new events arrive, no layout jank. */
+.protocol-feed-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--glass-border);
+  animation: protocol-feed-in 0.4s ease both;
+}
+
+.protocol-feed-row:last-child {
+  border-bottom: none;
+}
+
+@keyframes protocol-feed-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .protocol-feed-row {
+    animation: none;
+  }
+}
+
 .page-title {
   font-family: var(--font-heading);
   font-weight: 900;

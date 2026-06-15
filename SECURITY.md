@@ -112,3 +112,26 @@ QIE Domains improve UX but do not replace policy enforcement.
   and is reverse-verified against the registry where possible. With no resolver
   configured, `.qie` forward resolution is cleanly unavailable — Qevie never
   fabricates an address, a transaction hash, a receipt, or a resolution.
+
+## Stats Integrity
+
+Protocol stats are derived from confirmed on-chain events and clearly
+service-sourced records — never fabricated.
+
+- Volume, policy counts, executions, paymaster usage, and receipts come from
+  confirmed contract events. Pending and failed events are tracked separately and
+  never counted as confirmed volume or active state. The volume model is
+  deliberately non-overlapping so no payment is double-counted.
+- The dashboard must not display fake volume, fake receipts, fake policy counts,
+  fake activity events, or fake transaction hashes. Metrics the deployed
+  contracts do not emit (guardian *approvals*, on-chain pause state, per-UserOp
+  paymaster mode) are surfaced as "not emitted on-chain", not as a fabricated 0.
+- Global protocol stats (`/api/protocol/*`) and connected-user stats
+  (`/api/me/*`) are kept strictly separate so a user is never shown protocol-wide
+  totals as if they were their own.
+- Each stats service process indexes exactly one chain; a request naming a
+  different `chainId` is refused with the chain actually served, so mainnet data
+  can never be presented as testnet data (or vice-versa).
+- The indexer only reads chain logs and writes its own JSON stores. It never
+  touches payment execution, session keys, or the paymaster, and can be disabled
+  with `INDEXER_ENABLED=false` with zero impact on payment flows.

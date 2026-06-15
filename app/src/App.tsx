@@ -23,6 +23,7 @@ const PayLink = lazy(() => import("./pages/PayLink.js"));
 const BatchPay = lazy(() => import("./pages/BatchPay.js"));
 const BulkImport = lazy(() => import("./pages/BulkImport.js"));
 const Autopilot = lazy(() => import("./pages/Autopilot.js"));
+const Protocol = lazy(() => import("./pages/Protocol.js"));
 const AutopilotNew = lazy(() => import("./pages/AutopilotNew.js"));
 const AutopilotPolicies = lazy(() => import("./pages/AutopilotPolicies.js"));
 const AutopilotActivity = lazy(() => import("./pages/AutopilotActivity.js"));
@@ -44,6 +45,9 @@ export default function App(): React.ReactElement {
         <Routes>
           <Route path="/onboard" element={<Onboarding />} />
           <Route path="/pay" element={<PayLink />} />
+          {/* Public protocol dashboard — viewable without connecting a wallet. */}
+          <Route path="/protocol" element={<Protocol />} />
+          <Route path="/stats" element={<Navigate to="/protocol" replace />} />
           <Route path="*" element={<Navigate to="/onboard" replace />} />
         </Routes>
       </Suspense>
@@ -76,6 +80,8 @@ export default function App(): React.ReactElement {
             <Route path="/passport/:accountOrUsername" element={<Passport />} />
             <Route path="/receipt/:receiptId" element={<ReceiptDetail />} />
             <Route path="/developers" element={<Developers />} />
+            <Route path="/protocol" element={<Protocol />} />
+            <Route path="/stats" element={<Navigate to="/protocol" replace />} />
             <Route path="/autopilot" element={<Autopilot />} />
             <Route path="/autopilot/new" element={<AutopilotNew />} />
             <Route path="/autopilot/policies" element={<AutopilotPolicies />} />

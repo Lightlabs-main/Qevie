@@ -222,6 +222,13 @@ export interface QevieClientConfig {
   rpcUrl: string;
   bundlerUrl: string;
   paymasterServiceUrl: string;
+  /**
+   * Base URL for the protocol-stats API (the paymaster-service that runs the
+   * indexer). When omitted, `client.stats.*` rejects with a clear
+   * "not configured" error instead of returning fabricated numbers. Often the
+   * same origin as `paymasterServiceUrl`.
+   */
+  statsApiUrl?: string;
   contracts: import("./contracts.js").QevieContracts;
   /** Default salt for smart account derivation. Defaults to 0. */
   defaultSalt?: bigint;

@@ -21,6 +21,11 @@ const bundlerUrl =
 const paymasterServiceUrl =
   import.meta.env["VITE_PAYMASTER_SERVICE_URL"] ?? "http://localhost:3001";
 
+// The protocol-stats API is served by the same paymaster-service that runs the
+// indexer; default to that origin, overridable for split deployments.
+const statsApiUrl =
+  import.meta.env["VITE_STATS_API_URL"] ?? paymasterServiceUrl;
+
 const appBaseUrl = import.meta.env["VITE_APP_BASE_URL"] ?? "https://app.qevie.io";
 
 const contractAddresses = isTestnet ? TESTNET_CONTRACTS : MAINNET_CONTRACTS;
@@ -82,6 +87,7 @@ export const APP_CONFIG = {
   rpcUrl,
   bundlerUrl,
   paymasterServiceUrl,
+  statsApiUrl,
   appBaseUrl,
   agentPolicyManager:
     agentPolicyManager !== undefined && agentPolicyManager !== ""

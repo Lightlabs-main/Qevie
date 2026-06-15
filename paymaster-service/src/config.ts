@@ -121,6 +121,49 @@ export const REBALANCER_EP_TARGET_WEI = BigInt(optionalEnv("REBALANCER_EP_TARGET
 export const REBALANCER_SIGNER_FLOOR_WEI = BigInt(optionalEnv("REBALANCER_SIGNER_FLOOR_WEI", "200000000000000000")); // 0.2 QIE
 export const REBALANCER_SIGNER_TARGET_WEI = BigInt(optionalEnv("REBALANCER_SIGNER_TARGET_WEI", "500000000000000000")); // 0.5 QIE
 
+// ---------------------------------------------------------------------------
+// Protocol stats indexer
+// ---------------------------------------------------------------------------
+
+/** Whether the protocol-stats indexer loop runs (reads chain logs only). */
+export const INDEXER_ENABLED = process.env["INDEXER_ENABLED"] !== "false";
+/** Poll interval for the indexer loop, in milliseconds (default 30s). */
+export const INDEXER_POLL_INTERVAL_MS = Number(
+  optionalEnv("INDEXER_POLL_INTERVAL_MS", "30000"),
+);
+/**
+ * Confirmation depth before a chain event is treated as final. Only blocks at
+ * or below `head - INDEXER_CONFIRMATION_BLOCKS` are indexed, so a shallow reorg
+ * never persists a vanished event. QIE finalizes quickly; 5 is conservative.
+ */
+export const INDEXER_CONFIRMATION_BLOCKS = Number(
+  optionalEnv("INDEXER_CONFIRMATION_BLOCKS", "5"),
+);
+/** Max blocks scanned per indexer tick (keeps getLogs ranges within RPC caps). */
+export const INDEXER_MAX_BLOCK_RANGE = BigInt(
+  optionalEnv("INDEXER_MAX_BLOCK_RANGE", "5000"),
+);
+/**
+ * First block the indexer scans from on a cold start (no saved cursor). Default
+ * 0 scans from genesis on the first run — set this to a recent/deploy block in
+ * production to keep the initial sync fast. Per-chain override via
+ * INDEXER_START_BLOCK_MAINNET / INDEXER_START_BLOCK_TESTNET.
+ */
+export const INDEXER_START_BLOCK = BigInt(
+  optionalEnv(
+    CHAIN_ID === 1983 ? "INDEXER_START_BLOCK_TESTNET" : "INDEXER_START_BLOCK_MAINNET",
+    optionalEnv("INDEXER_START_BLOCK", "0"),
+  ),
+);
+/** JSON store for normalized protocol events. */
+export const PROTOCOL_EVENTS_STORE_PATH = (): string =>
+  optionalEnv("PROTOCOL_EVENTS_STORE_PATH", "./data/protocol-events.json");
+/** JSON store for the per-chain indexer cursor (last safely-indexed block). */
+export const INDEXER_CURSOR_STORE_PATH = (): string =>
+  optionalEnv("INDEXER_CURSOR_STORE_PATH", "./data/indexer-cursor.json");
+/** Cap on retained protocol events to keep the JSON store bounded. */
+export const PROTOCOL_EVENTS_MAX = Number(optionalEnv("PROTOCOL_EVENTS_MAX", "5000"));
+
 export const QIE_DOMAINS_ADDRESS: Address = "0x26cCB3fABd6db18834987134d715Ba2346CE7223";
 
 /**

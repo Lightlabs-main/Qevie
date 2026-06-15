@@ -23,6 +23,7 @@ import {
 } from "./abis.js";
 import { AGENT_POLICY_MANAGER_ABI } from "./agent/abis.js";
 import { GasModule, type AutopilotGasDecision } from "./gas.js";
+import { StatsModule } from "./stats/index.js";
 import { QevieAccount } from "./account.js";
 import { BundlerClient } from "./bundler.js";
 import { resolveRecipient } from "./resolve.js";
@@ -107,6 +108,8 @@ export class QevieClient {
   };
   /** Sustainable gas model decision layer (sponsored / QUSDC / native / paused). */
   readonly gas: GasModule;
+  /** Protocol + wallet stats read layer (backed by the indexer service). */
+  readonly stats: StatsModule;
   /** Effective QIE Domain config (explicit, or derived from contract addresses). */
   readonly qieDomainConfig: QieDomainConfig;
   private readonly resolverAdapter: QieDomainResolverAdapter;
@@ -133,6 +136,7 @@ export class QevieClient {
       getRecentReceipts: this.getRecentReceipts.bind(this),
     };
     this.gas = new GasModule(this.publicClient, this.config.contracts);
+    this.stats = new StatsModule(this.config.statsApiUrl);
     this.agent = {
       createSessionPolicy: this.createSessionPolicy.bind(this),
       listSessionPolicies: this.listSessionPolicies.bind(this),

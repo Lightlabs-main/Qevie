@@ -33,6 +33,17 @@ import {
   resumeJob,
   startCsvImportExecutor,
 } from "./csv-import.js";
+import {
+  getMyEventsResponse,
+  getMyStatsResponse,
+  getProtocolEventsResponse,
+  getProtocolStatsResponse,
+  servesChain,
+  startIndexer,
+  INDEXED_CHAIN_ID,
+} from "./indexer/index.js";
+import { recordDomainResolution } from "./indexer/domain-indexer.js";
+import type { QevieProtocolEventType } from "@qevie/sdk";
 
 async function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -199,6 +210,9 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
         return;
       }
       const result = await resolveRecipientForPreview(body.recipient);
+      // Best-effort stats: record `.qie` resolution outcomes. Never blocks or
+      // alters the resolution result.
+      recordDomainResolution(result);
       json(res, 200, result);
     } catch (e) {
       console.error("[api] /resolve-recipient error:", e);
@@ -247,6 +261,25 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
     } catch (e) {
       console.error("[api] /receipts error:", e);
       json(res, 500, { error: e instanceof Error ? e.message : "Internal error" });
+    }
+    return;
+  }
+
+  // -------------------------------------------------------------------------
+  // Protocol stats (read-only). Global /api/protocol/* and wallet /api/me/*.
+  // This process indexes exactly one chain (INDEXED_CHAIN_ID), so a request for
+  // another chainId is refused rather than answered with the wrong chain's data.
+  // -------------------------------------------------------------------------
+  if (req.url?.startsWith("/api/protocol/") || req.url?.startsWith("/api/me/")) {
+    if (req.method !== "GET") {
+      json(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    try {
+      handleStatsApi(req, res);
+    } catch (e) {
+      console.error("[api] stats error:", e);
+      json(res, 500, { error: "Internal error" });
     }
     return;
   }
@@ -398,6 +431,75 @@ async function handleCsvImport(req: IncomingMessage, res: ServerResponse): Promi
   json(res, 404, { error: "Not found" });
 }
 
+/**
+ * Router for the read-only protocol-stats endpoints. Single-chain aware: every
+ * route serves this process's INDEXED_CHAIN_ID. A `chainId` query that names a
+ * different chain is refused with the chain this process actually serves, so a
+ * mainnet service can never return testnet data (or vice-versa).
+ */
+function handleStatsApi(req: IncomingMessage, res: ServerResponse): void {
+  const url = new URL(req.url ?? "", "http://localhost");
+  const path = url.pathname;
+
+  const requestedChain = url.searchParams.get("chainId");
+  if (requestedChain !== null && requestedChain !== "" && !servesChain(Number(requestedChain))) {
+    json(res, 409, {
+      error: `This stats service indexes chain ${INDEXED_CHAIN_ID}, not ${requestedChain}.`,
+      servedChainId: INDEXED_CHAIN_ID,
+    });
+    return;
+  }
+
+  const parseTypes = (): QevieProtocolEventType[] | undefined => {
+    const raw = url.searchParams.get("types");
+    if (raw === null || raw === "") return undefined;
+    return raw.split(",").map((t) => t.trim()).filter((t) => t !== "") as QevieProtocolEventType[];
+  };
+  const parseLimit = (fallback: number): number => {
+    const raw = Number(url.searchParams.get("limit"));
+    if (!Number.isFinite(raw) || raw <= 0) return fallback;
+    return Math.min(Math.floor(raw), 200);
+  };
+
+  if (path === "/api/protocol/stats") {
+    json(res, 200, getProtocolStatsResponse());
+    return;
+  }
+  if (path === "/api/protocol/events") {
+    json(res, 200, getProtocolEventsResponse(parseLimit(50), parseTypes()));
+    return;
+  }
+  if (path === "/api/protocol/policies") {
+    json(res, 200, getProtocolStatsResponse().autopilot);
+    return;
+  }
+  if (path === "/api/protocol/paymaster") {
+    json(res, 200, getProtocolStatsResponse().paymaster);
+    return;
+  }
+  if (path === "/api/protocol/domains") {
+    json(res, 200, getProtocolStatsResponse().domains);
+    return;
+  }
+
+  // Wallet-scoped routes require a smartAccount and never mix in global totals.
+  const smartAccount = url.searchParams.get("smartAccount");
+  if (smartAccount === null || !isAddress(smartAccount)) {
+    json(res, 400, { error: "valid smartAccount query param required" });
+    return;
+  }
+  if (path === "/api/me/stats") {
+    json(res, 200, getMyStatsResponse(smartAccount as Address));
+    return;
+  }
+  if (path === "/api/me/events") {
+    json(res, 200, getMyEventsResponse(smartAccount as Address, parseLimit(50), parseTypes()));
+    return;
+  }
+
+  json(res, 404, { error: "Not found" });
+}
+
 server.listen(PORT, () => {
   console.log(`[paymaster-service] listening on :${PORT}`);
 });
@@ -417,6 +519,7 @@ startAutopilotExecutor();
 startCsvImportExecutor();
 startDexHeartbeat();
 startRebalancer();
+startIndexer();
 
 process.on("SIGTERM", () => {
   server.close(() => process.exit(0));

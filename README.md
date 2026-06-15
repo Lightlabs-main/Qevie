@@ -104,11 +104,49 @@ Qevie currently includes:
 - username registration and reverse lookup
 - payment links and QR flows
 - ReceiptRegistry + Qevie Passport (portable payment reputation)
+- **Protocol stats**: a live indexer + public `/protocol` dashboard, landing proof strip, and connected-wallet stats
 - mobile PWA frontend
 - a TypeScript SDK (`@qevie/sdk`) for QIE builders
 - VPS deployment with PM2-managed app, bundler, and paymaster services
 
 This is a working, deployed gas-abstracted stablecoin payment stack, not just a contract repo.
+
+## Protocol Stats
+
+Qevie surfaces real protocol activity in three layers, all backed by confirmed
+on-chain events (no fabricated volume, receipts, or policy counts):
+
+1. **Landing proof strip** — a lightweight "Live on QIE" section on the
+   pre-connect landing page: four public KPI cards (Total QUSDC Volume, Autopilot
+   Executions, Active Policies, Receipts Created) plus a compact moving feed and a
+   `View Protocol Dashboard →` CTA.
+2. **Full `/protocol` dashboard** — a public page (no wallet required, `/stats`
+   redirects here) with the four KPI cards, tabs for Autopilot / Payments /
+   Paymaster / Receipts & Passport / QIE Domains, lightweight charts, and a
+   filterable live protocol feed with explorer links and pause-on-hover.
+3. **Connected app stats** — wallet-scoped panels on the Dashboard and Autopilot
+   pages showing only the connected smart account's policies, executions,
+   receipts, volume, and Paymaster/gas usage. Global and personal stats are kept
+   strictly separate.
+
+How it works:
+
+- A reorg-aware indexer in `paymaster-service/src/indexer/` scans the deployed
+  contracts (AgentPolicyManager, QevieSmartAccount, QeviePaymaster,
+  BatchPayments, PaymentRequest, SubscriptionManager, ReceiptRegistry) at a
+  configurable confirmation depth and normalizes events into a JSON store.
+- It exposes read-only `GET /api/protocol/*` (global) and `GET /api/me/*`
+  (wallet-scoped) endpoints. Each service process indexes exactly one chain, so
+  mainnet stats never mix with testnet stats.
+- The SDK exposes `qevie.stats.*` (`getProtocolStats`, `getProtocolEvents`,
+  `getMyStats`, `getMyEvents`, …) for external builders; if no stats API is
+  configured it returns a clear error rather than fake data.
+- Metrics that the current contracts do not emit on-chain (guardian *approvals*,
+  on-chain pause state, per-UserOp paymaster mode) are shown as "not emitted
+  on-chain" — never faked. See `docs/QEVIE_PROTOCOL_STATS_DASHBOARD_PLAN.md`.
+- Disable the indexer instantly with `INDEXER_ENABLED=false`; tune with
+  `INDEXER_CONFIRMATION_BLOCKS`, `INDEXER_POLL_INTERVAL_MS`,
+  `INDEXER_START_BLOCK[_MAINNET|_TESTNET]`.
 
 ## Gas Model
 

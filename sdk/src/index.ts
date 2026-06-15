@@ -25,6 +25,25 @@ export type {
   AutopilotGasDecision,
 } from "./gas.js";
 
+// Protocol + wallet stats (read layer backed by the indexer service)
+export { StatsModule, STATS_NOT_CONFIGURED_MESSAGE } from "./stats/index.js";
+export type {
+  QevieProtocolEventType,
+  QevieProtocolEventStatus,
+  QevieGasModeLabel,
+  QevieProtocolEvent,
+  StatsPeriod,
+  ProtocolOverview,
+  ProtocolAutopilotStats,
+  ProtocolPaymentStats,
+  ProtocolPaymasterStats,
+  ProtocolReceiptStats,
+  ProtocolDomainStats,
+  ProtocolStatsResponse,
+  ProtocolEventsResponse,
+  MyStatsResponse,
+} from "./stats/index.js";
+
 // Payment links / QR
 export { buildPaymentUri, parsePaymentUri, buildShareUrl } from "./links.js";
 

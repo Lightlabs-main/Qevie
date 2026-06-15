@@ -7,6 +7,7 @@ import { APP_CONFIG } from "../config.js";
 import { gaslessParams } from "../lib/gasless.js";
 import { formatQusdc, useGasStatus } from "../lib/useGasStatus.js";
 import { GasStatusPanel } from "../components/GasStatusPanel.js";
+import MyStatsPanel from "../components/protocol/MyStatsPanel.js";
 
 const FAUCET_QUSDC = 100_000_000n; // 100 QUSDC (6 decimals)
 const MINT_ABI = [
@@ -360,6 +361,11 @@ export default function Dashboard(): React.ReactElement {
 
       <div style={{ marginBottom: "1rem" }}>
         <GasStatusPanel status={gasStatus} />
+      </div>
+
+      {/* Wallet-scoped protocol stats (personal only; global lives on /protocol). */}
+      <div style={{ marginBottom: "1rem" }}>
+        <MyStatsPanel smartAccount={address} />
       </div>
 
       {/* Signer (owner EOA) */}

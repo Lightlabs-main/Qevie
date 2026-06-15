@@ -70,6 +70,16 @@ Phase 0 Verify -> Phase 1 AA core on testnet -> GO/NO-GO (4337 vs EIP-2771 fallb
   - SDK: @qevie/sdk core + React hooks + receipt/passport and Autopilot policy/session methods — builds ESM+CJS, typechecks clean, tests passing
   - App: React PWA with payment, Passport, and Autopilot pages; policy creation and listing are live on testnet; live gas-status panels cover Send, Batch Pay, Requests, Subscriptions, and Wallet; typecheck, lint, tests, and production build pass
   - paymaster-service: allowlist token API + subscription keeper + receipt issuance endpoint — typechecks clean
+  - Protocol stats: reorg-aware indexer (`paymaster-service/src/indexer/*`) over the deployed
+    contracts → JSON store; read-only `/api/protocol/*` (global) and `/api/me/*` (wallet-scoped)
+    endpoints; SDK `qevie.stats.*`; public `/protocol` dashboard (+ `/stats` redirect), landing
+    proof strip on Onboarding, and connected stats on Dashboard + Autopilot. Single-chain per
+    process (mainnet/testnet never mix). vitest: aggregator + store + SDK stats tests passing.
+    Known missing on-chain events (shown as "not emitted on-chain", never faked): guardian
+    approvals, on-chain policy pause, per-UserOp paymaster mode + native-fallback counter — adding
+    these needs a mainnet contract redeploy (deferred). Indexer is additive and disable-able via
+    `INDEXER_ENABLED=false`. Indexing status: pending first live run on the VPS (cold-start
+    backfill from `INDEXER_START_BLOCK`); plan in `docs/QEVIE_PROTOCOL_STATS_DASHBOARD_PLAN.md`.
   - infra: Voltaire bundler docker-compose (unsafe mode)
   - Live bundler: receipt lookup fixed with two recent 10,000-block log ranges; fresh receipt and policy creation probes passed on 2026-06-08
   - Paymaster-first behavior restored: sponsored mint and sponsored policy creation pass again after a clean bundler restart; SDK no longer auto-demotes to `self`

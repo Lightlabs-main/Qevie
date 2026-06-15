@@ -1,6 +1,7 @@
 import React from "react";
 import { useWallet } from "../hooks/useWallet.js";
 import Logo from "../components/Logo.js";
+import ProofStrip from "../components/protocol/ProofStrip.js";
 
 const FEATURES = [
   {
@@ -107,6 +108,9 @@ export default function Onboarding(): React.ReactElement {
             </div>
           ))}
         </div>
+
+        {/* Live protocol proof strip — shows Qevie is operational pre-connect. */}
+        <ProofStrip />
 
         {/* CTA */}
         <div className="tight-stack" style={{ gap: "var(--s-2)" }}>
