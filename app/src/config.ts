@@ -1,6 +1,12 @@
 import { MAINNET_CONTRACTS, TESTNET_CONTRACTS, type QevieContracts, type QieDomainConfig } from "@qevie/sdk";
 
-const isTestnet = import.meta.env["VITE_USE_TESTNET"] === "true";
+const forcedMainnetHosts = new Set(["qevie.xyz", "www.qevie.xyz", "qevie.duckdns.org"]);
+const runtimeHostname = typeof window !== "undefined" ? window.location.hostname : null;
+const isForcedMainnetHost = runtimeHostname !== null && forcedMainnetHosts.has(runtimeHostname);
+const isTestnet = isForcedMainnetHost ? false : import.meta.env["VITE_USE_TESTNET"] === "true";
+const isProductionBuild = import.meta.env.PROD;
+const PROD_BUNDLER_URL = "https://qevie.duckdns.org/bundler/rpc";
+const PROD_PAYMASTER_SERVICE_URL = "https://qevie.duckdns.org/paymaster";
 
 /**
  * Verified QIE Domains registry proxy on QIE mainnet (reverse lookups only:
@@ -16,17 +22,20 @@ const rpcUrl = isTestnet
   : (import.meta.env["VITE_MAINNET_RPC"] ?? "https://rpc1mainnet.qie.digital/");
 
 const bundlerUrl =
-  import.meta.env["VITE_BUNDLER_URL"] ?? "http://localhost:4337";
+  import.meta.env["VITE_BUNDLER_URL"] ??
+  (isProductionBuild ? PROD_BUNDLER_URL : "http://localhost:4337");
 
 const paymasterServiceUrl =
-  import.meta.env["VITE_PAYMASTER_SERVICE_URL"] ?? "http://localhost:3001";
+  import.meta.env["VITE_PAYMASTER_SERVICE_URL"] ??
+  (isProductionBuild ? PROD_PAYMASTER_SERVICE_URL : "http://localhost:3001");
 
 // The protocol-stats API is served by the same paymaster-service that runs the
 // indexer; default to that origin, overridable for split deployments.
 const statsApiUrl =
   import.meta.env["VITE_STATS_API_URL"] ?? paymasterServiceUrl;
 
-const appBaseUrl = import.meta.env["VITE_APP_BASE_URL"] ?? "https://app.qevie.io";
+const appBaseUrl = import.meta.env["VITE_APP_BASE_URL"] ??
+  (typeof window !== "undefined" ? window.location.origin : "https://qevie.xyz");
 
 const contractAddresses = isTestnet ? TESTNET_CONTRACTS : MAINNET_CONTRACTS;
 const receiptRegistry = import.meta.env["VITE_RECEIPT_REGISTRY_ADDRESS"];

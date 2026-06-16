@@ -34,6 +34,7 @@ export type {
 } from "./types.js";
 
 const NOT_CONFIGURED = "Stats API is not configured for this network.";
+const REQUEST_TIMEOUT_MS = 8_000;
 
 export class StatsModule {
   constructor(private readonly statsApiUrl: string | undefined) {}
@@ -46,10 +47,23 @@ export class StatsModule {
   }
 
   private async get<T>(path: string): Promise<T> {
-    const res = await fetch(`${this.base()}${path}`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(`${this.base()}${path}`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") {
+        throw new Error("Stats request timed out.");
+      }
+      throw e;
+    } finally {
+      clearTimeout(timeout);
+    }
     if (!res.ok) {
       let message = `Stats request failed (${res.status})`;
       try {

@@ -118,7 +118,7 @@ export class QevieClient {
   constructor(config: QevieClientConfig) {
     this.config = config;
     this.publicClient = createPublicClient({
-      transport: http(config.rpcUrl),
+      transport: http(config.rpcUrl, { timeout: 10_000 }),
     }) as AnyPublicClient;
     this.qieDomainConfig = config.qieDomain ?? deriveQieDomainConfig(config);
     this.resolverAdapter = createResolverAdapter(this.publicClient, this.qieDomainConfig);

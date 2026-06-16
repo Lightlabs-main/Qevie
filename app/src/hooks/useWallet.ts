@@ -33,6 +33,7 @@ interface Eip1193Provider {
 
 const WalletContext = createContext<WalletState | null>(null);
 const LOCAL_STORAGE_KEY = "qevie_signer_address";
+const SMART_ACCOUNT_TIMEOUT_MS = 12_000;
 
 function isMobile(): boolean {
   return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
@@ -135,6 +136,20 @@ function friendlyError(e: unknown): string {
   return msg || "Failed to connect wallet";
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
+}
+
 export function WalletProvider({ children }: { children: ReactNode }): React.ReactElement {
   const client = useQevieClient();
 
@@ -181,7 +196,11 @@ export function WalletProvider({ children }: { children: ReactNode }): React.Rea
       if (signerAddr === undefined) throw new Error("No accounts available");
 
       const s = buildEip1193Signer(provider, signerAddr);
-      const smartAddr = await client.getSmartAccountAddress(s);
+      const smartAddr = await withTimeout(
+        client.getSmartAccountAddress(s),
+        SMART_ACCOUNT_TIMEOUT_MS,
+        "Timed out while deriving your smart account. Check the QIE RPC and try again.",
+      );
 
       setSigner(s);
       setSignerAddress(signerAddr);
@@ -212,7 +231,11 @@ export function WalletProvider({ children }: { children: ReactNode }): React.Rea
           return;
         }
         const s = buildEip1193Signer(provider, acct);
-        const smartAddr = await client.getSmartAccountAddress(s);
+        const smartAddr = await withTimeout(
+          client.getSmartAccountAddress(s),
+          SMART_ACCOUNT_TIMEOUT_MS,
+          "Timed out while restoring your smart account.",
+        );
         if (cancelled) return;
         setSigner(s);
         setSignerAddress(acct);
