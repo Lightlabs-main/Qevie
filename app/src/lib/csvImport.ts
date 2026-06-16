@@ -81,6 +81,7 @@ export interface PaymentIntent {
   userOpHash?: Hex;
   txHash?: Hex;
   receiptId?: Hex;
+  paymentLink?: string;
 }
 
 export interface JobView {
@@ -157,6 +158,7 @@ export async function confirmImportRows(
     txHash?: Hex;
     receiptType?: "BATCH_PAYMENT" | "SINGLE_PAYMENT" | "PAYMENT_REQUEST_SETTLED" | "SUBSCRIPTION_PAYMENT";
     failed?: boolean;
+    paymentLink?: string;
   },
 ): Promise<{ job: CsvImportJob }> {
   const res = await fetch(`${base}/csv-import/${jobId}/confirm`, {

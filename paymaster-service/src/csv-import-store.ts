@@ -100,6 +100,8 @@ export interface PaymentIntentRecord {
   userOpHash?: Hex;
   txHash?: Hex;
   receiptId?: Hex;
+  /** Shareable payment link for a confirmed `request` row (so it can be sent). */
+  paymentLink?: string;
 }
 
 // ---------------------------------------------------------------------------

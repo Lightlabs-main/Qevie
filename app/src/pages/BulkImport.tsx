@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { useQevieClient } from "@qevie/sdk/react";
+import { buildPaymentUri } from "@qevie/sdk";
 import { useWallet } from "../hooks/useWallet.js";
+import { APP_CONFIG } from "../config.js";
 import { gaslessParams } from "../lib/gasless.js";
 import { isXlsx, xlsxToCsv } from "../lib/xlsx.js";
 import { useGasStatus } from "../lib/useGasStatus.js";
@@ -155,6 +157,15 @@ export default function BulkImport(): React.ReactElement {
     } finally { setBusy(false); setProgress(""); }
   };
 
+  // Shareable link for a created payment request: a qevie: pay link wrapped in
+  // the app's /pay route. Whoever opens it pays the requested amount to this
+  // account. (PAYMENT_REQUEST_ABI exposes no event, so there's no on-chain
+  // request id to wire a /send link to — this mirrors the Request page.)
+  const buildRequestLink = (amount: string): string => {
+    const uri = buildPaymentUri({ to: address as `0x${string}`, amount: BigInt(amount) });
+    return `${APP_CONFIG.appBaseUrl}/pay?pay=${encodeURIComponent(uri)}`;
+  };
+
   const executePlan = async (plan: ExecutionPlan): Promise<void> => {
     if (signer === null) throw new Error("Wallet not connected");
     const gas = await gaslessParams(client, address as `0x${string}`);
@@ -206,10 +217,14 @@ export default function BulkImport(): React.ReactElement {
           ...gas,
         });
       const mined = res.status === "mined" && res.txHash !== null;
+      const paymentLink = mined && single.type === "request"
+        ? buildRequestLink(single.amount)
+        : undefined;
       await confirmImportRows(jobId, {
         rowIndexes: [single.rowIndex],
         userOpHash: res.userOpHash,
         ...(mined ? { txHash: res.txHash as `0x${string}` } : { failed: res.status === "failed" }),
+        ...(paymentLink !== undefined ? { paymentLink } : {}),
       });
     }
   };
@@ -291,12 +306,45 @@ export default function BulkImport(): React.ReactElement {
   // Done
   // -------------------------------------------------------------------------
   if (phase === "done" && job !== null) {
+    const requestLinks = intents.filter(
+      (i) => i.type === "request" && i.status === "confirmed" && typeof i.paymentLink === "string",
+    );
     return (
       <main className="page fade-in">
         <div style={{ textAlign: "center", paddingTop: "2rem" }}>
           <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>✅</div>
           <h1 style={{ marginBottom: "0.5rem" }}>Import {job.status === "completed" ? "complete" : "submitted"}</h1>
           <p className="text-muted">{job.counts.confirmed} of {job.counts.total} rows confirmed</p>
+        </div>
+
+        {requestLinks.length > 0 && (
+          <div className="card" style={{ padding: "1rem", marginTop: "1.5rem", textAlign: "left" }}>
+            <h3 style={{ fontSize: "0.9rem", margin: "0 0 0.25rem" }}>Payment links to share</h3>
+            <p className="text-muted" style={{ fontSize: "0.75rem", margin: "0 0 0.75rem" }}>
+              Send these to whoever should pay each request.
+            </p>
+            {requestLinks.map((i) => (
+              <div key={i.rowIndex} style={{ marginBottom: "0.75rem" }}>
+                <div className="text-muted" style={{ fontSize: "0.75rem", marginBottom: "0.25rem" }}>
+                  Request ${fmtQusdc(i.amount)} · {i.recipientInput}
+                </div>
+                <div className="flex-between" style={{ gap: "0.5rem" }}>
+                  <input
+                    readOnly
+                    value={i.paymentLink}
+                    onFocus={(e) => e.currentTarget.select()}
+                    style={{ flex: 1, fontSize: "0.7rem", padding: "0.4rem", fontFamily: "monospace" }}
+                  />
+                  <button className="btn-ghost" onClick={() => { void navigator.clipboard.writeText(i.paymentLink as string); }}>
+                    Copy
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ textAlign: "center" }}>
           <button
             className="btn-secondary btn-lg"
             style={{ marginTop: "2rem" }}

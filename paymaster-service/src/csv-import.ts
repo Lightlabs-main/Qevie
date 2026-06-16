@@ -629,6 +629,8 @@ export interface ConfirmRowsInput {
   receiptType?: "BATCH_PAYMENT" | "SINGLE_PAYMENT" | "PAYMENT_REQUEST_SETTLED" | "SUBSCRIPTION_PAYMENT";
   /** The op was included on-chain but its execution reverted (no funds moved). */
   failed?: boolean;
+  /** Shareable link for a confirmed `request` row, recorded for later retrieval. */
+  paymentLink?: string;
 }
 
 /**
@@ -671,6 +673,7 @@ export async function confirmUserRows(jobId: string, input: ConfirmRowsInput): P
       status: "confirmed",
       txHash: input.txHash,
       ...(input.userOpHash !== undefined ? { userOpHash: input.userOpHash } : {}),
+      ...(input.paymentLink !== undefined ? { paymentLink: input.paymentLink } : {}),
     });
     // Only an actual payment settles into a receipt. Creating a payment request
     // or a subscription is not itself a payment — its receipts come later (the
