@@ -57,6 +57,15 @@ const HEARTBEAT_INTERVAL_MS = Number(
   process.env["DEX_HEARTBEAT_INTERVAL_MS"] ?? 30 * 60_000,
 );
 
+// Explicit gas limit for the refresh writes. The QIE RPC's eth_estimateGas
+// returns only the intrinsic cost (~21k) for these calls, so without an
+// explicit limit viem submits a tx with no execution gas and `sync()` reverts
+// out-of-gas — silently leaving the pair stale. A real sync() uses ~75k; 200k
+// is a comfortable ceiling that also covers the testnet setReserves write.
+const REFRESH_GAS_LIMIT = BigInt(
+  process.env["DEX_REFRESH_GAS_LIMIT"] ?? 200_000,
+);
+
 /** Testnet: re-write the stub reserves to bump its timestamp (owner only). */
 async function beatTestnet(): Promise<void> {
   const key = DEX_REFRESH_PRIVATE_KEY();
@@ -93,7 +102,12 @@ async function beatTestnet(): Promise<void> {
     functionName: "setReserves",
     args: [r0, r1],
     chain: null,
+    gas: REFRESH_GAS_LIMIT,
   });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") {
+    throw new Error(`setReserves reverted (tx ${hash}); testnet quote NOT refreshed`);
+  }
   console.log(`[dex-heartbeat] refreshed testnet pair reserves timestamp (tx ${hash})`);
 }
 
@@ -105,6 +119,8 @@ async function beatMainnet(): Promise<void> {
   if (pair === undefined) return;
 
   const account = privateKeyToAccount(key as Hex);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const publicClient = createPublicClient({ transport: http(RPC_URL) }) as any;
   const walletClient = createWalletClient({ account, transport: http(RPC_URL) });
   const hash = await walletClient.writeContract({
     address: pair,
@@ -112,7 +128,12 @@ async function beatMainnet(): Promise<void> {
     functionName: "sync",
     args: [],
     chain: null,
+    gas: REFRESH_GAS_LIMIT,
   });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") {
+    throw new Error(`sync() reverted (tx ${hash}); QUSDC_GAS quote NOT refreshed`);
+  }
   console.log(`[dex-heartbeat] mainnet pair sync() refreshed QUSDC_GAS quote (tx ${hash})`);
 }
 
