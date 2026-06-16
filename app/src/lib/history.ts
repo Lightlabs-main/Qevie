@@ -75,7 +75,7 @@ export interface BatchHistoryItem {
 
 export interface FeedItem {
   id: string;
-  kind: "request_created" | "request_paid" | "batch_paid";
+  kind: "request_created" | "request_paid" | "batch_paid" | "transfer_received" | "transfer_sent" | "transfer_internal";
   title: string;
   subtitle: string;
   amount: bigint;
@@ -131,9 +131,10 @@ interface ContractEventLog {
 }
 
 interface TransferLog {
-  args: { value?: bigint };
+  args: { from?: Address; to?: Address; value?: bigint };
   blockNumber: bigint | null;
   transactionHash: Hash | null;
+  logIndex?: number | null;
 }
 
 interface RequestCreatedLog extends ContractEventLog {
@@ -505,6 +506,179 @@ export async function getGlobalFeed(client: HistoryClient): Promise<FeedItem[]> 
     .slice(0, 12);
 }
 
+export async function getWalletFeed(
+  client: HistoryClient,
+  smartAccount: Address | null,
+  ownerAddress: Address | null,
+): Promise<FeedItem[]> {
+  const tracked = [smartAccount, ownerAddress].filter((value): value is Address => value !== null);
+  if (tracked.length === 0) return [];
+
+  const publicClient = getHistoryPublicClient(client);
+  const latestBlock = await publicClient.getBlockNumber();
+  const fromBlock = latestBlock > FEED_BLOCK_WINDOW ? latestBlock - FEED_BLOCK_WINDOW : 0n;
+  const trackedSet = new Set(tracked.map((value) => value.toLowerCase()));
+
+  const transferGroups = await Promise.all(
+    tracked.flatMap((value) => ([
+      getPagedTransferLogs(publicClient, {
+        address: APP_CONFIG.contracts.qusdc,
+        event: TRANSFER_EVENT,
+        args: { to: value },
+        fromBlock,
+        toBlock: latestBlock,
+      }),
+      getPagedTransferLogs(publicClient, {
+        address: APP_CONFIG.contracts.qusdc,
+        event: TRANSFER_EVENT,
+        args: { from: value },
+        fromBlock,
+        toBlock: latestBlock,
+      }),
+    ])),
+  );
+
+  const transferLogs = dedupeByKey(
+    transferGroups.flat(),
+    (log) => `${log.transactionHash ?? "0x"}_${log.logIndex ?? -1}_${log.blockNumber?.toString() ?? "0"}`,
+  );
+
+  const [batchGroups, requestCreatedGroups, requestPaidGroups] = await Promise.all([
+    Promise.all(
+      tracked.map((value) => getPagedContractEvents(publicClient, {
+        address: APP_CONFIG.contracts.batchPayments,
+        abi: BATCH_PAYMENTS_ABI,
+        eventName: "BatchPaid",
+        args: { sender: value },
+        fromBlock,
+        toBlock: latestBlock,
+      })),
+    ),
+    Promise.all(
+      tracked.flatMap((value) => ([
+        getPagedContractEvents(publicClient, {
+          address: APP_CONFIG.contracts.paymentRequest,
+          abi: PAYMENT_REQUEST_ABI,
+          eventName: "RequestCreated",
+          args: { requestor: value },
+          fromBlock,
+          toBlock: latestBlock,
+        }),
+        getPagedContractEvents(publicClient, {
+          address: APP_CONFIG.contracts.paymentRequest,
+          abi: PAYMENT_REQUEST_ABI,
+          eventName: "RequestCreated",
+          args: { payer: value },
+          fromBlock,
+          toBlock: latestBlock,
+        }),
+      ])),
+    ),
+    Promise.all(
+      tracked.map((value) => getPagedContractEvents(publicClient, {
+        address: APP_CONFIG.contracts.paymentRequest,
+        abi: PAYMENT_REQUEST_ABI,
+        eventName: "RequestPaid",
+        args: { payer: value },
+        fromBlock,
+        toBlock: latestBlock,
+      })),
+    ),
+  ]);
+
+  const batchPaid = dedupeByKey(
+    batchGroups.flat() as BatchPaidLog[],
+    (log) => `${log.transactionHash ?? "0x"}_${log.logIndex ?? -1}`,
+  );
+  const requestCreated = dedupeByKey(
+    requestCreatedGroups.flat() as RequestCreatedLog[],
+    (log) => `${log.transactionHash ?? "0x"}_${log.logIndex ?? -1}`,
+  );
+  const requestPaid = dedupeByKey(
+    requestPaidGroups.flat() as RequestPaidLog[],
+    (log) => `${log.transactionHash ?? "0x"}_${log.logIndex ?? -1}`,
+  );
+
+  const timestamps = await getBlockTimestamps(
+    client,
+    [
+      ...transferLogs.map((log) => log.blockNumber),
+      ...batchPaid.map((log) => log.blockNumber),
+      ...requestCreated.map((log) => log.blockNumber),
+      ...requestPaid.map((log) => log.blockNumber),
+    ].filter(isNonNullBigInt),
+  );
+
+  const transferItems: FeedItem[] = transferLogs.map((log) => {
+    const from = log.args.from;
+    const to = log.args.to;
+    const fromTracked = from !== undefined && trackedSet.has(from.toLowerCase());
+    const toTracked = to !== undefined && trackedSet.has(to.toLowerCase());
+    const kind =
+      fromTracked && toTracked ? "transfer_internal" :
+        toTracked ? "transfer_received" :
+          "transfer_sent";
+    const title =
+      kind === "transfer_internal" ? "Moved between your accounts" :
+        kind === "transfer_received" ? "QUSDC received" :
+          "QUSDC sent";
+    const subtitle =
+      from === undefined || to === undefined
+        ? "QUSDC transfer"
+        : `${shortAddress(from)} → ${shortAddress(to)}`;
+    return {
+      id: `tr_${log.transactionHash}_${log.logIndex ?? 0}`,
+      kind,
+      title,
+      subtitle,
+      amount: log.args.value ?? 0n,
+      timestamp: (timestamps[log.blockNumber?.toString() ?? "0"] ?? 0) * 1000,
+      txHash: log.transactionHash ?? null,
+    };
+  });
+
+  const items: FeedItem[] = [
+    ...transferItems,
+    ...requestCreated.map((log) => ({
+      id: `rc_${log.transactionHash}_${log.logIndex}`,
+      kind: "request_created" as const,
+      title: "Payment request created",
+      subtitle: `${shortAddress(log.args.requestor as string)} requested from ${shortAddress(log.args.payer as string)}`,
+      amount: log.args.amount ?? 0n,
+      timestamp: (timestamps[log.blockNumber?.toString() ?? "0"] ?? 0) * 1000,
+      txHash: log.transactionHash ?? null,
+    })),
+    ...requestPaid.map((log) => ({
+      id: `rp_${log.transactionHash}_${log.logIndex}`,
+      kind: "request_paid" as const,
+      title: "Payment request paid",
+      subtitle: `${shortAddress(log.args.payer as string)} settled request #${log.args.requestId?.toString() ?? "?"}`,
+      amount: log.args.amount ?? 0n,
+      timestamp: (timestamps[log.blockNumber?.toString() ?? "0"] ?? 0) * 1000,
+      txHash: log.transactionHash ?? null,
+    })),
+    ...batchPaid.map((log) => {
+      const amounts = (log.args.amounts ?? []) as bigint[];
+      const total = amounts.reduce((sum, amount) => sum + amount, 0n);
+      const recipients = (log.args.recipients ?? []) as Address[];
+      return {
+        id: `bp_${log.transactionHash}_${log.logIndex}`,
+        kind: "batch_paid" as const,
+        title: "Batch payout sent",
+        subtitle: `${shortAddress(log.args.sender as string)} paid ${recipients.length} recipients`,
+        amount: total,
+        timestamp: (timestamps[log.blockNumber?.toString() ?? "0"] ?? 0) * 1000,
+        txHash: log.transactionHash ?? null,
+      };
+    }),
+  ];
+
+  return items
+    .filter((item) => item.timestamp > 0)
+    .sort(sortByNewest)
+    .slice(0, 12);
+}
+
 export function formatQusdc(value: bigint | null): string {
   if (value === null) return "Open";
   return `$${(Number(value) / 1e6).toFixed(2)}`;
@@ -618,7 +792,7 @@ async function getPagedTransferLogs(
   args: {
     address: Address;
     event: typeof TRANSFER_EVENT;
-    args?: { to?: Address };
+    args?: { from?: Address; to?: Address };
     fromBlock: bigint;
     toBlock: bigint;
   },

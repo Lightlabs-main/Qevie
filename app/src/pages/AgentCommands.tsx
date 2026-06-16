@@ -203,16 +203,21 @@ function RecipientRow({ leg }: { leg: ResolvedLeg }): React.ReactElement {
         ? "Qevie username"
         : "Direct address";
   return (
-    <div className="surface-card" style={{ padding: "0.6rem 0.75rem" }}>
-      <div className="flex-between">
-        <span style={{ fontWeight: 700 }}>{resolved.displayName ?? leg.input}</span>
+    <div className="surface-card" style={{ padding: "0.6rem 0.75rem", minWidth: 0 }}>
+      <div className="flex-between" style={{ gap: "0.75rem", alignItems: "flex-start" }}>
+        <span style={{ fontWeight: 700, minWidth: 0, overflowWrap: "anywhere" }}>
+          {resolved.displayName ?? leg.input}
+        </span>
         {resolved.kind === "qie_domain" && (
-          <span className={resolved.verified ? "chip chip-success" : "chip"} style={{ fontSize: "0.65rem" }}>
+          <span
+            className={resolved.verified ? "chip chip-success" : "chip"}
+            style={{ fontSize: "0.65rem", flexShrink: 0 }}
+          >
             {resolved.verified ? "Verified .qie" : "Unverified"}
           </span>
         )}
       </div>
-      <div className="text-muted mono" style={{ fontSize: "0.7rem", wordBreak: "break-all" }}>
+      <div className="text-muted mono" style={{ fontSize: "0.7rem", overflowWrap: "anywhere" }}>
         {resolved.address}
       </div>
       <div className="text-muted" style={{ fontSize: "0.65rem" }}>{sourceLabel}</div>

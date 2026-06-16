@@ -5,15 +5,17 @@ import { QUSDC_ABI } from "@qevie/sdk";
 import { useWallet } from "../hooks/useWallet.js";
 import { APP_CONFIG } from "../config.js";
 import Logo from "../components/Logo.js";
-import { formatQusdc, getGlobalFeed, type FeedItem } from "../lib/history.js";
+import { formatQusdc, getWalletFeed, type FeedItem } from "../lib/history.js";
 
 export default function Home(): React.ReactElement {
   const client = useQevieClient();
-  const { address } = useWallet();
+  const { address, signerAddress } = useWallet();
 
   const [balance, setBalance] = useState<bigint | null>(null);
   const [loading, setLoading] = useState(true);
   const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [feedLoading, setFeedLoading] = useState(true);
+  const [feedError, setFeedError] = useState<string | null>(null);
 
   useEffect(() => {
     if (address === null) return;
@@ -37,18 +39,33 @@ export default function Home(): React.ReactElement {
 
   useEffect(() => {
     let mounted = true;
-    void (async () => {
+    const loadFeed = async (): Promise<void> => {
+      setFeedLoading(true);
       try {
-        const nextFeed = await getGlobalFeed(client);
-        if (mounted) setFeed(nextFeed);
-      } catch {
-        if (mounted) setFeed([]);
+        const nextFeed = await getWalletFeed(client, address, signerAddress);
+        if (mounted) {
+          setFeed(nextFeed);
+          setFeedError(null);
+        }
+      } catch (e) {
+        if (mounted) {
+          setFeed([]);
+          setFeedError(e instanceof Error ? e.message : "Unable to load wallet activity.");
+        }
+      } finally {
+        if (mounted) setFeedLoading(false);
       }
-    })();
-    return () => { mounted = false; };
-  }, [client]);
+    };
+    void loadFeed();
+    const id = window.setInterval(() => { void loadFeed(); }, 20_000);
+    return () => {
+      mounted = false;
+      window.clearInterval(id);
+    };
+  }, [address, signerAddress, client]);
 
   const usd = balance !== null ? (Number(balance) / 1e6).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00";
+  const explorerBase = APP_CONFIG.chainId === 1990 ? "https://mainnet.qie.digital" : "https://testnet.qie.digital";
 
   const actions = [
     { to: "/send", label: "Send", icon: "↑", color: "var(--accent)" },
@@ -136,35 +153,63 @@ export default function Home(): React.ReactElement {
 
       <section style={{ marginTop: "var(--s-4)" }}>
         <div className="section-label">Live Activity</div>
-        <div className="surface-card" style={{ overflow: "hidden", padding: "var(--s-2)" }}>
-          {feed.length === 0 ? (
+        <div className="surface-card" style={{ padding: "var(--s-2)" }}>
+          {feedLoading && feed.length === 0 ? (
+            <div className="flex-center" style={{ padding: "var(--s-2)" }}>
+              <span className="spinner" />
+            </div>
+          ) : feed.length === 0 ? (
             <div className="text-muted" style={{ fontSize: "0.8125rem", textAlign: "center", padding: "var(--s-2)" }}>
-              No onchain app activity yet.
+              {feedError !== null
+                ? "Could not load recent wallet activity."
+                : "No recent Qevie activity found for this wallet."}
             </div>
           ) : (
-            <div className="history-ticker">
-              <div className="history-ticker-track">
-                {[...feed, ...feed].map((item, index) => (
-                  <Link
-                    key={`${item.id}_${index}`}
-                    to="/history"
-                    className="history-ticker-card"
-                    style={{ textDecoration: "none" }}
-                  >
-                    <div style={{ fontWeight: 700, color: "var(--text-pure)", fontSize: "0.8125rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-1)" }}>
+              {feed.map((item) => (
+                <div key={item.id} className="flex-between" style={{ gap: "var(--s-2)", minWidth: 0, padding: "var(--s-1) 0" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "var(--text-pure)" }}>
                       {item.title}
                     </div>
-                    <div className="text-muted" style={{ fontSize: "0.6875rem" }}>
+                    <div className="text-muted" style={{ fontSize: "0.6875rem", overflowWrap: "anywhere" }}>
                       {item.subtitle}
                     </div>
-                    <div style={{ marginTop: "0.35rem", color: "var(--accent-light)", fontWeight: 700 }}>
+                  </div>
+                  <div style={{ flex: "0 0 auto", textAlign: "right" }}>
+                    <div style={{ color: "var(--accent-light)", fontWeight: 700, fontSize: "0.8125rem" }}>
                       {formatQusdc(item.amount)}
                     </div>
-                  </Link>
-                ))}
-              </div>
+                    {item.txHash !== null && (
+                      <a
+                        href={`${explorerBase}/tx/${item.txHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="history-link"
+                        style={{ fontSize: "0.625rem" }}
+                      >
+                        tx ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
+          <Link
+            to="/protocol"
+            style={{
+              display: "block",
+              marginTop: "var(--s-2)",
+              textAlign: "center",
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              color: "var(--accent-light)",
+              textDecoration: "none",
+            }}
+          >
+            View Protocol Dashboard →
+          </Link>
         </div>
       </section>
     </>
