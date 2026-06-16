@@ -123,7 +123,10 @@ export function detectDuplicates(rows: DedupeRow[], options: DedupeOptions = {})
         rowIndex: row.rowIndex,
         check: "history",
         severity: severityForType(row.type),
-        message: "An identical payment was already made (or is pending) within the lookback window.",
+        message:
+          row.type === "request"
+            ? "An identical request was already created (or is pending) within the lookback window."
+            : "An identical payment was already made (or is pending) within the lookback window.",
       });
     }
   }

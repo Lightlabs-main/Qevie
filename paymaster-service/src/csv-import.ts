@@ -409,8 +409,12 @@ function collectHistoryContentKeys(currentJobId: string): Hex[] {
   for (const intent of loadIntents()) {
     if (!recentJobIds.has(intent.jobId)) continue;
     if (intent.contentKey === undefined) continue;
-    // Anything not explicitly dead counts as "seen" for double-spend purposes.
-    if (intent.status === "blocked") continue;
+    // Only rows that actually moved money (confirmed) or are in-flight
+    // (executing) count as "already made (or is pending)". A row that was merely
+    // previewed or approved-but-never-submitted is a draft, not a payment — so
+    // counting "valid" rows here makes re-uploading (or re-previewing) the same
+    // file falsely report every row as a duplicate of its own earlier draft.
+    if (intent.status !== "confirmed" && intent.status !== "executing") continue;
     keys.push(intent.contentKey);
   }
   return keys;
