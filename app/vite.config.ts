@@ -17,6 +17,11 @@ export default defineConfig({
         orientation: "portrait",
         icons: [
           {
+            src: "/favicon.png",
+            sizes: "32x32",
+            type: "image/png",
+          },
+          {
             src: "/icon-192.png",
             sizes: "192x192",
             type: "image/png",
