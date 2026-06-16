@@ -40,6 +40,14 @@ const receiptTypeIndex: Record<ReceiptType, number> = {
   MANUAL_RECEIPT: 5,
 };
 
+// Explicit gas limit for createReceipt. The QIE RPC's eth_estimateGas returns
+// only the intrinsic cost (~21k) for this call, so without an explicit limit
+// viem submits a tx with no execution gas and createReceipt reverts
+// out-of-gas — the tx still "confirms" with no logs, which previously surfaced
+// as the misleading "no ReceiptCreated event was found". createReceipt uses
+// ~325k; 600k is a comfortable ceiling.
+const RECEIPT_GAS_LIMIT = BigInt(process.env["RECEIPT_GAS_LIMIT"] ?? 600_000);
+
 export async function issueReceipt(body: ReceiptRequestBody): Promise<CreateReceiptResult> {
   if (RECEIPT_REGISTRY_ADDRESS === undefined) {
     throw new Error("ReceiptRegistry is not configured on the service");
@@ -70,9 +78,13 @@ export async function issueReceipt(body: ReceiptRequestBody): Promise<CreateRece
       ],
     }),
     chain: undefined,
+    gas: RECEIPT_GAS_LIMIT,
   });
 
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+  if (receipt.status !== "success") {
+    throw new Error(`createReceipt reverted (tx ${txHash}); no receipt was issued`);
+  }
   for (const log of receipt.logs) {
     try {
       const decoded = decodeEventLog({
