@@ -5,8 +5,13 @@ const runtimeHostname = typeof window !== "undefined" ? window.location.hostname
 const isForcedMainnetHost = runtimeHostname !== null && forcedMainnetHosts.has(runtimeHostname);
 const isTestnet = isForcedMainnetHost ? false : import.meta.env["VITE_USE_TESTNET"] === "true";
 const isProductionBuild = import.meta.env.PROD;
-const PROD_BUNDLER_URL = "https://qevie.duckdns.org/bundler/rpc";
-const PROD_PAYMASTER_SERVICE_URL = "https://qevie.duckdns.org/paymaster";
+const browserOrigin = typeof window !== "undefined" ? window.location.origin : null;
+const PROD_BUNDLER_URL = browserOrigin !== null
+  ? `${browserOrigin}/bundler/rpc`
+  : "https://qevie.xyz/bundler/rpc";
+const PROD_PAYMASTER_SERVICE_URL = browserOrigin !== null
+  ? `${browserOrigin}/paymaster`
+  : "https://qevie.xyz/paymaster";
 
 /**
  * Verified QIE Domains registry proxy on QIE mainnet (reverse lookups only:
