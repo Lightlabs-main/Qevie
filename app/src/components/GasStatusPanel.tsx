@@ -36,7 +36,8 @@ export function GasStatusPanel({
     detail = `Network fee ≈ ${formatQusdc(estimatedQusdcGas)} USDC · paid from your USDC via QIEDex (WQIE → USDC)`;
     tone = "info";
   } else {
-    title = "Add USDC to continue";
+    const staleQuote = typeof reason === "string" && /stale|quote/i.test(reason);
+    title = staleQuote ? "Refreshing USDC gas quote" : "Add USDC to continue";
     detail = reason ?? "You need USDC to pay the network fee.";
     tone = "warn";
   }

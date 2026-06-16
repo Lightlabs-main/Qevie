@@ -30,6 +30,11 @@ export interface GaslessResolution {
 
 /** Worst-case gas cost (wei) to quote QUSDC gas (~600k gas @ 1 gwei). */
 const MAX_GAS_COST_WEI = 600_000n * 1_000_000_000n;
+const STALE_QUOTE_RETRY_MS = 1_500;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function remainingFreeOps(client: GaslessClient, smart: Address): Promise<number> {
   try {
@@ -50,7 +55,7 @@ async function quoteQusdcGas(
   client: GaslessClient,
   smart: Address,
 ): Promise<{ available: boolean; quoted: bigint; reason: string }> {
-  try {
+  const read = async (): Promise<{ available: boolean; quoted: bigint; reason: string }> => {
     const [available, quoted, reason] = (await client.publicClient.readContract({
       address: APP_CONFIG.contracts.paymaster,
       abi: PAYMASTER_ABI,
@@ -58,6 +63,14 @@ async function quoteQusdcGas(
       args: [smart, MAX_GAS_COST_WEI],
     })) as [boolean, bigint, string];
     return { available, quoted, reason };
+  };
+
+  try {
+    const first = await read();
+    if (first.available || !/stale/i.test(first.reason)) return first;
+
+    await delay(STALE_QUOTE_RETRY_MS);
+    return await read();
   } catch {
     return { available: false, quoted: 0n, reason: "QUSDC gas pricing unavailable" };
   }
