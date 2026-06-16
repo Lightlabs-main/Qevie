@@ -75,6 +75,14 @@ const WQIE_ABI = [
 
 const BPS = 10_000n;
 
+// Explicit gas limit for the rebalancer's contract writes (see `send` below).
+// QIE's eth_estimateGas under-reports to the intrinsic cost (~21k) for contract
+// calls, so without an explicit limit each write reverts out-of-gas — the same
+// failure that stalled the DEX heartbeat and receipt issuance. The QIEDex swap
+// is the heaviest call (~150-200k); 400k comfortably covers withdrawQUSDC,
+// transfer, swap, the WQIE unwrap, and depositToEntryPoint.
+const REBALANCER_GAS_LIMIT = BigInt(process.env["REBALANCER_GAS_LIMIT"] ?? 400_000);
+
 function fmtUnits(v: bigint, decimals: number): string {
   const d = 10n ** BigInt(decimals);
   const whole = v / d;
@@ -93,6 +101,19 @@ function getAmountOut(amountIn: bigint, reserveIn: bigint, reserveOut: bigint): 
 
 function getPublicClient(): AnyPublicClient {
   return createPublicClient({ transport: http(RPC_URL) }) as AnyPublicClient;
+}
+
+/**
+ * Wait for a tx and abort the rebalance if it reverted. This sequence moves
+ * funds across multiple dependent txs, so a silently-reverted step (e.g. the
+ * swap after QUSDC was already transferred into the pair) must throw rather
+ * than let the loop proceed on a false success.
+ */
+async function confirm(pc: AnyPublicClient, hash: Hex, step: string): Promise<void> {
+  const receipt = await pc.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") {
+    throw new Error(`[rebalancer] ${step} reverted (tx ${hash}); aborting rebalance`);
+  }
 }
 
 interface SinkState {
@@ -199,32 +220,32 @@ export async function runRebalanceOnce(): Promise<void> {
   // viem's writeContract generics are strict about chain inference; this loop
   // passes fully-formed const ABIs, so a thin untyped wrapper is fine here.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const send = (req: any): Promise<Hex> => wallet.writeContract({ ...req, chain: null });
+  const send = (req: any): Promise<Hex> => wallet.writeContract({ ...req, chain: null, gas: REBALANCER_GAS_LIMIT });
 
   // 1. Pull the QUSDC batch out of the paymaster to the owner.
   const t1 = await send({ address: paymaster, abi: PAYMASTER_ABI, functionName: "withdrawQUSDC", args: [owner.address, batch] });
-  await pc.waitForTransactionReceipt({ hash: t1 });
+  await confirm(pc, t1, "withdrawQUSDC");
 
   // 2. Transfer QUSDC into the pair, then low-level swap for WQIE to the owner.
   const t2 = await send({ address: qusdc, abi: ERC20_ABI, functionName: "transfer", args: [pair, batch] });
-  await pc.waitForTransactionReceipt({ hash: t2 });
+  await confirm(pc, t2, "QUSDC transfer to pair");
   const amount0Out = wqieIsToken0 ? minWqieOut : 0n;
   const amount1Out = wqieIsToken0 ? 0n : minWqieOut;
   const t3 = await send({ address: pair, abi: PAIR_ABI, functionName: "swap", args: [amount0Out, amount1Out, owner.address, "0x"] });
-  await pc.waitForTransactionReceipt({ hash: t3 });
+  await confirm(pc, t3, "swap");
 
   // 3. Unwrap WQIE → native QIE.
   const t4 = await send({ address: wqie, abi: WQIE_ABI, functionName: "withdraw", args: [minWqieOut] });
-  await pc.waitForTransactionReceipt({ hash: t4 });
+  await confirm(pc, t4, "WQIE unwrap");
 
   // 4. Top up the sinks: signer EOA first, the rest into the EntryPoint deposit.
   if (toSigner > 0n) {
     const t5 = await wallet.sendTransaction({ to: signerAddr, value: toSigner, chain: null });
-    await pc.waitForTransactionReceipt({ hash: t5 });
+    await confirm(pc, t5, "signer top-up");
   }
   if (toEntryPoint > 0n) {
     const t6 = await send({ address: paymaster, abi: PAYMASTER_ABI, functionName: "depositToEntryPoint", value: toEntryPoint });
-    await pc.waitForTransactionReceipt({ hash: t6 });
+    await confirm(pc, t6, "depositToEntryPoint");
   }
   console.log(`[rebalancer] done — recycled ${fmtQusdc(batch)} QUSDC into ${fmtQie(qieOut)} QIE`);
 }
