@@ -156,6 +156,7 @@ export async function confirmImportRows(
     userOpHash?: Hex;
     txHash?: Hex;
     receiptType?: "BATCH_PAYMENT" | "SINGLE_PAYMENT" | "PAYMENT_REQUEST_SETTLED" | "SUBSCRIPTION_PAYMENT";
+    failed?: boolean;
   },
 ): Promise<{ job: CsvImportJob }> {
   const res = await fetch(`${base}/csv-import/${jobId}/confirm`, {

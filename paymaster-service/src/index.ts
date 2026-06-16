@@ -400,6 +400,7 @@ async function handleCsvImport(req: IncomingMessage, res: ServerResponse): Promi
       userOpHash?: string;
       txHash?: string;
       receiptType?: "BATCH_PAYMENT" | "SINGLE_PAYMENT" | "PAYMENT_REQUEST_SETTLED" | "SUBSCRIPTION_PAYMENT";
+      failed?: boolean;
     };
     if (!Array.isArray(body.rowIndexes) || body.rowIndexes.length === 0) {
       json(res, 400, { error: "rowIndexes required" });
@@ -410,6 +411,7 @@ async function handleCsvImport(req: IncomingMessage, res: ServerResponse): Promi
       ...(typeof body.userOpHash === "string" ? { userOpHash: body.userOpHash as Hex } : {}),
       ...(typeof body.txHash === "string" ? { txHash: body.txHash as Hex } : {}),
       ...(body.receiptType !== undefined ? { receiptType: body.receiptType } : {}),
+      ...(body.failed === true ? { failed: true } : {}),
     });
     json(res, 200, { job });
     return;

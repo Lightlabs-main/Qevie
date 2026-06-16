@@ -627,6 +627,8 @@ export interface ConfirmRowsInput {
   userOpHash?: Hex;
   txHash?: Hex;
   receiptType?: "BATCH_PAYMENT" | "SINGLE_PAYMENT" | "PAYMENT_REQUEST_SETTLED" | "SUBSCRIPTION_PAYMENT";
+  /** The op was included on-chain but its execution reverted (no funds moved). */
+  failed?: boolean;
 }
 
 /**
@@ -643,6 +645,17 @@ export async function confirmUserRows(jobId: string, input: ConfirmRowsInput): P
   for (const rowIndex of input.rowIndexes) {
     const intent = intentsForJob(jobId).find((i) => i.rowIndex === rowIndex);
     if (intent === undefined || intent.status === "confirmed") continue;
+
+    if (input.failed === true) {
+      // The userOp was mined but its inner call reverted — no payment settled.
+      // Record the failure honestly; never mark it confirmed or write a receipt.
+      updateIntent(jobId, rowIndex, {
+        status: "failed",
+        blockReason: "On-chain execution reverted; no funds moved.",
+        ...(input.userOpHash !== undefined ? { userOpHash: input.userOpHash } : {}),
+      });
+      continue;
+    }
 
     if (input.txHash === undefined) {
       // Submission acknowledged but not yet mined: record the userOp so a resume

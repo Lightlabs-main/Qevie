@@ -9,6 +9,7 @@ import {
   approveImportJob,
   confirmImportRows,
   createImportJob,
+  getImportJob,
   sourceLabel,
   type ExecutionPlan,
   type JobView,
@@ -62,6 +63,19 @@ function summaryRailLabel(intents: PaymentIntent[]): string {
   if (types.length === 0) return "—";
   if (types.length === 1) return executionRailLabel(types[0] as PaymentIntent["type"]);
   return `Mixed rails (${types.map((type) => intentTypeLabel(type as PaymentIntent["type"])).join(", ")})`;
+}
+
+/** Action button label that counts each rail honestly (a request is not a pay). */
+function approveButtonLabel(validRows: PaymentIntent[]): string {
+  const pay = validRows.filter((r) => r.type === "pay").length;
+  const request = validRows.filter((r) => r.type === "request").length;
+  const subscription = validRows.filter((r) => r.type === "subscription").length;
+  const parts = [
+    pay > 0 ? `pay ${pay}` : null,
+    request > 0 ? `request ${request}` : null,
+    subscription > 0 ? `subscribe ${subscription}` : null,
+  ].filter((p): p is string => p !== null);
+  return parts.length === 0 ? "Approve & run" : `Approve & ${parts.join(" · ")}`;
 }
 
 /** Map a canonical schedule string to a period in seconds for `subscribe`. */
@@ -146,6 +160,17 @@ export default function BulkImport(): React.ReactElement {
     const gas = await gaslessParams(client, address as `0x${string}`);
     const jobId = (job as JobView["job"]).jobId;
 
+    // batchPay() pulls QUSDC from the smart account via the BatchPayments
+    // contract, so that contract must be approved first or every batch reverts
+    // (single transfers don't need this). One-time + idempotent.
+    if (plan.payChunks.length > 0) {
+      setProgress("Approving batch payments (one-time)…");
+      const armed = await client.ensureBatchPaymentsReady(signer, gas);
+      if (!armed.armed) {
+        throw new Error(armed.reason ?? "Could not approve batch payments. Please try again.");
+      }
+    }
+
     for (const chunk of plan.payChunks) {
       setProgress(`Paying ${chunk.recipients.length} recipient(s)…`);
       const res = await client.batchPay(signer, {
@@ -153,12 +178,20 @@ export default function BulkImport(): React.ReactElement {
         batchId: chunk.batchId,
         ...gas,
       });
+      // Only treat a row as paid when the userOp itself succeeded. A reverted
+      // op can still be mined inside a successful tx (gas is charged, no funds
+      // move); reporting that txHash would mark a failed payment "confirmed".
+      const mined = res.status === "mined" && res.txHash !== null;
       await confirmImportRows(jobId, {
         rowIndexes: chunk.recipients.map((r) => r.rowIndex),
         userOpHash: res.userOpHash,
-        ...(res.txHash !== null ? { txHash: res.txHash } : {}),
-        receiptType: "BATCH_PAYMENT",
+        ...(mined
+          ? { txHash: res.txHash as `0x${string}`, receiptType: "BATCH_PAYMENT" as const }
+          : { failed: res.status === "failed" }),
       });
+      if (!mined && res.status === "failed") {
+        throw new Error("A batch payment reverted on-chain — no funds moved. Nothing was charged except gas.");
+      }
     }
 
     for (const single of plan.singles) {
@@ -172,10 +205,11 @@ export default function BulkImport(): React.ReactElement {
           maxPayments: 12,
           ...gas,
         });
+      const mined = res.status === "mined" && res.txHash !== null;
       await confirmImportRows(jobId, {
         rowIndexes: [single.rowIndex],
         userOpHash: res.userOpHash,
-        ...(res.txHash !== null ? { txHash: res.txHash } : {}),
+        ...(mined ? { txHash: res.txHash as `0x${string}` } : { failed: res.status === "failed" }),
       });
     }
   };
@@ -192,7 +226,11 @@ export default function BulkImport(): React.ReactElement {
       if (result.plan !== undefined) {
         await executePlan(result.plan);
       }
-      setView((prev) => (prev !== null ? { ...prev, job: result.job } : prev));
+      // Re-fetch so the summary reflects the post-execution outcome. result.job
+      // is the pre-execution snapshot (confirmed = 0), which otherwise showed a
+      // misleading "0 of N confirmed" even after rows settled.
+      const refreshed = await getImportJob(job.jobId);
+      setView(refreshed);
       setPhase("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Execution failed. You can resume from the job.");
@@ -345,11 +383,11 @@ export default function BulkImport(): React.ReactElement {
       <button
         className="btn-primary btn-lg"
         onClick={() => { void handleApproveAndRun(); }}
-        disabled={busy || (job?.counts.valid ?? 0) === 0 || gasStatus.uiMode === "NEEDS_QUSDC" || gasStatus.arming}
+        disabled={busy || validRows.length === 0 || gasStatus.uiMode === "NEEDS_QUSDC" || gasStatus.arming}
       >
         {busy
           ? <><span className="spinner" style={{ width: 18, height: 18 }} /> {progress || "Executing…"}</>
-          : `Approve & pay ${job?.counts.valid ?? 0} valid row(s)`}
+          : approveButtonLabel(validRows)}
       </button>
     </main>
   );

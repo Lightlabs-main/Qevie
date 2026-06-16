@@ -245,6 +245,53 @@ export class QevieClient {
     };
   }
 
+  /**
+   * Check whether a smart account has approved the BatchPayments contract to
+   * pull QUSDC. batchPay() moves funds via `transferFrom`, so an un-armed
+   * account makes every batch revert (single pay() uses a direct transfer and
+   * needs no approval).
+   */
+  async isBatchPaymentsReady(smartAccount: Address): Promise<boolean> {
+    const allowance = (await this.publicClient.readContract({
+      address: this.config.contracts.qusdc,
+      abi: QUSDC_ABI,
+      functionName: "allowance",
+      args: [smartAccount, this.config.contracts.batchPayments],
+    })) as bigint;
+    return allowance >= maxUint256 / 2n;
+  }
+
+  /**
+   * Arm batch payments: a one-time approval of the BatchPayments contract to
+   * pull QUSDC. Mirrors ensureQusdcGasReady but for the batch-pay rail, and is
+   * idempotent (a no-op once armed). Uses the caller-resolved gas mode so the
+   * approval follows the same sponsored/QUSDC route as the payments it precedes.
+   */
+  async ensureBatchPaymentsReady(
+    signer: QevieSigner,
+    gas: { mode: GasMode; allowlistToken?: AllowlistToken },
+  ): Promise<{ armed: boolean; alreadyArmed: boolean; userOpHash?: Hex; reason?: string }> {
+    const acc = this.account(signer);
+    const smartAccount = await acc.getAddress();
+    if (await this.isBatchPaymentsReady(smartAccount)) {
+      return { armed: true, alreadyArmed: true };
+    }
+    const approveData = encodeFunctionData({
+      abi: QUSDC_ABI,
+      functionName: "approve",
+      args: [this.config.contracts.batchPayments, maxUint256],
+    });
+    const callData = this._encodeExecute(this.config.contracts.qusdc, 0n, approveData);
+    const userOpHash = await this._submitOpNoWait(acc, callData, gas.mode, gas.allowlistToken);
+    const result = await this.bundler.waitForUserOp(userOpHash);
+    return {
+      armed: result.status === "mined",
+      alreadyArmed: false,
+      userOpHash,
+      ...(result.status === "mined" ? {} : { reason: "BatchPayments approval did not mine" }),
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Autopilot
   // ---------------------------------------------------------------------------
