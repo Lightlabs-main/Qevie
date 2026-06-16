@@ -32,8 +32,8 @@ export function GasStatusPanel({
     detail = `${sponsoredRemaining} / 3 free actions left · you pay 0 gas`;
     tone = "good";
   } else if (uiMode === "QUSDC_GAS") {
-    title = "USDC gas";
-    detail = `Network fee ≈ ${formatQusdc(estimatedQusdcGas)} USDC · paid from your USDC via QIEDex (WQIE → USDC)`;
+    title = "QUSDC gas";
+    detail = `Network fee ≈ ${formatQusdc(estimatedQusdcGas)} QUSDC`;
     tone = "info";
   } else {
     const staleQuote = typeof reason === "string" && /stale|quote/i.test(reason);
