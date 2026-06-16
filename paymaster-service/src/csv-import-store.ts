@@ -207,8 +207,16 @@ export function recountJob(jobId: string): CsvImportJob | undefined {
     confirmed: rows.filter((r) => r.status === "confirmed").length,
     failed: rows.filter((r) => r.status === "failed").length,
   };
+  // Only actual payments count toward the headline total. A request asks for
+  // money (incoming) and a subscription is a recurring authorization — neither
+  // is QUSDC leaving the account now, so folding them in would overstate what
+  // the user is paying.
   const totalBaseUnits = rows
-    .filter((r) => r.status === "valid" || r.status === "executing" || r.status === "confirmed")
+    .filter(
+      (r) =>
+        r.type === "pay" &&
+        (r.status === "valid" || r.status === "executing" || r.status === "confirmed"),
+    )
     .reduce((sum, r) => sum + BigInt(r.amount), 0n)
     .toString();
   return updateJob(jobId, { counts, totalBaseUnits });

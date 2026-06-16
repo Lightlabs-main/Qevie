@@ -208,7 +208,8 @@ export default function BulkImport(): React.ReactElement {
       <main className="page fade-in">
         <div className="page-header"><h2 className="page-title">Bulk Intent Import</h2></div>
         <p className="text-muted mb-4" style={{ fontSize: "0.8125rem" }}>
-          Upload a CSV and Qevie turns each row into a policy-checked QUSDC payment.
+          Upload a CSV and Qevie turns each row into the action its <code>type</code> asks for —
+          a payment, a payment request, or a subscription — all policy-checked.
           Duplicates are flagged, valid rows are batched, and re-uploading never double-pays.
         </p>
 
@@ -284,7 +285,7 @@ export default function BulkImport(): React.ReactElement {
           <SummaryRow label="Duplicates" value={String(job.counts.duplicates)} />
           <SummaryRow label="Needs review" value={String(job.counts.needsReview)} />
           <SummaryRow label="Blocked" value={String(job.counts.blocked)} />
-          <SummaryRow label="Total QUSDC" value={`$${fmtQusdc(job.totalBaseUnits)}`} accent />
+          <SummaryRow label="Total to pay" value={`$${fmtQusdc(job.totalBaseUnits)}`} accent />
           <SummaryRow label="Execution rail" value={summaryRailLabel(intents)} />
           <SummaryRow label="Gas mode" value={job.gasMode ?? "—"} />
         </div>
