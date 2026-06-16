@@ -12,6 +12,7 @@ const PROD_BUNDLER_URL = browserOrigin !== null
 const PROD_PAYMASTER_SERVICE_URL = browserOrigin !== null
   ? `${browserOrigin}/paymaster`
   : "https://qevie.xyz/paymaster";
+const forcePublicProductionRoutes = isProductionBuild && isForcedMainnetHost;
 
 /**
  * Verified QIE Domains registry proxy on QIE mainnet (reverse lookups only:
@@ -27,12 +28,16 @@ const rpcUrl = isTestnet
   : (import.meta.env["VITE_MAINNET_RPC"] ?? "https://rpc1mainnet.qie.digital/");
 
 const bundlerUrl =
-  import.meta.env["VITE_BUNDLER_URL"] ??
-  (isProductionBuild ? PROD_BUNDLER_URL : "http://localhost:4337");
+  forcePublicProductionRoutes
+    ? PROD_BUNDLER_URL
+    : (import.meta.env["VITE_BUNDLER_URL"] ??
+      (isProductionBuild ? PROD_BUNDLER_URL : "http://localhost:4337"));
 
 const paymasterServiceUrl =
-  import.meta.env["VITE_PAYMASTER_SERVICE_URL"] ??
-  (isProductionBuild ? PROD_PAYMASTER_SERVICE_URL : "http://localhost:3001");
+  forcePublicProductionRoutes
+    ? PROD_PAYMASTER_SERVICE_URL
+    : (import.meta.env["VITE_PAYMASTER_SERVICE_URL"] ??
+      (isProductionBuild ? PROD_PAYMASTER_SERVICE_URL : "http://localhost:3001"));
 
 // The protocol-stats API is served by the same paymaster-service that runs the
 // indexer; default to that origin, overridable for split deployments.
