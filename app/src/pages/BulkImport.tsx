@@ -23,6 +23,8 @@ subscription,dev.qie,20,Weekly dev,every Friday`;
 
 type Phase = "upload" | "preview" | "executing" | "done";
 
+type ImportRowKind = "valid" | "needs_review" | "blocked" | "duplicate";
+
 function fmtQusdc(baseUnits: string): string {
   return (Number(baseUnits) / 1e6).toFixed(2);
 }
@@ -30,6 +32,36 @@ function fmtQusdc(baseUnits: string): string {
 function shortAddr(a?: string): string {
   if (a === undefined) return "—";
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+
+function intentTypeLabel(type: PaymentIntent["type"]): string {
+  switch (type) {
+    case "pay":
+      return "Payment";
+    case "request":
+      return "Request";
+    case "subscription":
+      return "Subscription";
+  }
+}
+
+function executionRailLabel(type: PaymentIntent["type"]): string {
+  switch (type) {
+    case "pay":
+      return "Batch payment";
+    case "request":
+      return "Payment request";
+    case "subscription":
+      return "Subscription";
+  }
+}
+
+function summaryRailLabel(intents: PaymentIntent[]): string {
+  const active = intents.filter((intent) => intent.status !== "blocked");
+  const types = [...new Set(active.map((intent) => intent.type))];
+  if (types.length === 0) return "—";
+  if (types.length === 1) return executionRailLabel(types[0] as PaymentIntent["type"]);
+  return `Mixed rails (${types.map((type) => intentTypeLabel(type as PaymentIntent["type"])).join(", ")})`;
 }
 
 /** Map a canonical schedule string to a period in seconds for `subscribe`. */
@@ -71,6 +103,10 @@ export default function BulkImport(): React.ReactElement {
   const duplicates = useMemo(
     () => intents.filter((i) => i.duplicateSeverity !== undefined && !removed.has(i.rowIndex)),
     [intents, removed],
+  );
+  const validRows = useMemo(
+    () => intents.filter((i) => i.status === "valid" && i.duplicateSeverity === undefined),
+    [intents],
   );
   const blocked = useMemo(
     () => intents.filter((i) => i.status === "blocked" && i.duplicateSeverity === undefined),
@@ -249,8 +285,26 @@ export default function BulkImport(): React.ReactElement {
           <SummaryRow label="Needs review" value={String(job.counts.needsReview)} />
           <SummaryRow label="Blocked" value={String(job.counts.blocked)} />
           <SummaryRow label="Total QUSDC" value={`$${fmtQusdc(job.totalBaseUnits)}`} accent />
-          <SummaryRow label="Execution rail" value={job.rail ?? "—"} />
+          <SummaryRow label="Execution rail" value={summaryRailLabel(intents)} />
           <SummaryRow label="Gas mode" value={job.gasMode ?? "—"} />
+        </div>
+      )}
+
+      {validRows.length > 0 && (
+        <div style={{ marginBottom: "1rem" }}>
+          <h3 style={{ fontSize: "0.9rem", margin: "0 0 0.5rem" }}>Valid rows</h3>
+          {validRows.map((intent) => (
+            <ImportRowCard key={intent.rowIndex} intent={intent} kind="valid" />
+          ))}
+        </div>
+      )}
+
+      {needsReview.length > 0 && (
+        <div style={{ marginBottom: "1rem" }}>
+          <h3 style={{ fontSize: "0.9rem", margin: "0 0 0.5rem" }}>Needs review</h3>
+          {needsReview.map((intent) => (
+            <ImportRowCard key={intent.rowIndex} intent={intent} kind="needs_review" />
+          ))}
         </div>
       )}
 
@@ -263,24 +317,11 @@ export default function BulkImport(): React.ReactElement {
         </div>
       )}
 
-      {needsReview.length > 0 && (
-        <div className="alert mb-3" style={{ background: "var(--warn-dim, #2a2410)", fontSize: "0.8rem" }}>
-          {needsReview.length} row(s) need review (may exceed a policy window). They will be attempted; the chain is the backstop.
-        </div>
-      )}
-
       {blocked.length > 0 && (
         <div style={{ marginBottom: "1rem" }}>
           <h3 style={{ fontSize: "0.9rem", margin: "0 0 0.5rem" }}>Blocked rows</h3>
           {blocked.map((i) => (
-            <div key={i.rowIndex} className="card" style={{ padding: "0.6rem 0.75rem", marginBottom: "0.4rem" }}>
-              <div style={{ fontSize: "0.8rem", fontWeight: 700 }}>
-                Row {i.rowIndex + 1}: {i.recipientInput} · ${fmtQusdc(i.amount)}
-              </div>
-              <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-                {i.blockReason ?? (i.parseErrors ?? []).join(" ") ?? "Blocked."}
-              </div>
-            </div>
+            <ImportRowCard key={i.rowIndex} intent={i} kind="blocked" />
           ))}
         </div>
       )}
@@ -327,18 +368,66 @@ function SummaryRow({ label, value, accent }: { label: string; value: string; ac
 function DuplicateCard({ intent, onRemove }: { intent: PaymentIntent; onRemove: () => void }): React.ReactElement {
   const warning = intent.warnings[0];
   return (
-    <div className="card" style={{ padding: "0.75rem", marginBottom: "0.5rem", borderLeft: "3px solid var(--warn, #d6a400)" }}>
-      <div style={{ fontSize: "0.8rem", fontWeight: 700 }}>
-        {intent.recipientInput} → {shortAddr(intent.resolvedAddress)}
-        <span className="text-muted" style={{ fontWeight: 400 }}> · {sourceLabel(intent.resolutionSource)}</span>
-      </div>
-      <div style={{ fontSize: "0.85rem", margin: "0.15rem 0" }}>${fmtQusdc(intent.amount)} QUSDC</div>
-      <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-        {warning?.message ?? "Possible duplicate."} ({intent.duplicateSeverity === "block" ? "blocks by default" : "warning"})
-      </div>
+    <div>
+      <ImportRowCard intent={intent} kind="duplicate" />
       <button className="btn-ghost" style={{ marginTop: "0.4rem", fontSize: "0.75rem" }} onClick={onRemove}>
         Remove from import
       </button>
+      <div className="text-muted" style={{ fontSize: "0.75rem", marginTop: "0.35rem" }}>
+        {warning?.message ?? "Possible duplicate."} ({intent.duplicateSeverity === "block" ? "blocks by default" : "warning"})
+      </div>
+    </div>
+  );
+}
+
+function ImportRowCard({
+  intent,
+  kind,
+}: {
+  intent: PaymentIntent;
+  kind: ImportRowKind;
+}): React.ReactElement {
+  const borderColor =
+    kind === "blocked"
+      ? "var(--error)"
+      : kind === "duplicate" || kind === "needs_review"
+        ? "var(--warning)"
+        : "var(--success)";
+  const detail =
+    kind === "blocked"
+      ? intent.parseErrors?.join(" ") || intent.blockReason || "Blocked."
+      : kind === "needs_review"
+        ? intent.blockReason || "This row may exceed a policy window and will still be checked onchain."
+        : `${executionRailLabel(intent.type)}${intent.scheduleSpec !== undefined ? ` · ${intent.scheduleSpec}` : ""}`;
+
+  return (
+    <div
+      className="card"
+      style={{ padding: "0.75rem", marginBottom: "0.5rem", borderLeft: `3px solid ${borderColor}` }}
+    >
+      <div className="flex-between" style={{ alignItems: "flex-start", gap: "0.75rem" }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: "0.8rem", fontWeight: 700, overflowWrap: "anywhere" }}>
+            Row {intent.rowIndex + 1}: {intentTypeLabel(intent.type)} · {intent.recipientInput}
+          </div>
+          <div className="text-muted" style={{ fontSize: "0.72rem", overflowWrap: "anywhere" }}>
+            {intent.resolvedAddress !== undefined
+              ? `${shortAddr(intent.resolvedAddress)} · ${sourceLabel(intent.resolutionSource)}`
+              : "Unresolved recipient"}
+          </div>
+        </div>
+        <div style={{ flexShrink: 0, fontWeight: 700, color: "var(--accent-light)" }}>
+          ${fmtQusdc(intent.amount)}
+        </div>
+      </div>
+      {intent.memo !== "" && (
+        <div className="text-muted" style={{ fontSize: "0.72rem", marginTop: "0.25rem" }}>
+          Memo: {intent.memo}
+        </div>
+      )}
+      <div className="text-muted" style={{ fontSize: "0.75rem", marginTop: "0.3rem" }}>
+        {detail}
+      </div>
     </div>
   );
 }

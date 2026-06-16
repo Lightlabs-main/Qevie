@@ -1,4 +1,5 @@
 import {
+  bytesToHex,
   createPublicClient,
   http,
   type Address,
@@ -900,7 +901,7 @@ export class QevieClient {
     const encoded = new TextEncoder().encode(memo.slice(0, 31));
     const padded = new Uint8Array(32);
     padded.set(encoded);
-    return `0x${Buffer.from(padded).toString("hex")}` as Hex;
+    return bytesToHex(padded);
   }
 
   private _requireReceiptRegistry(): Address {
