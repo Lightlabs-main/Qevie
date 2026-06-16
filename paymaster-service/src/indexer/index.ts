@@ -30,7 +30,7 @@ import { collectPaymentEvents } from "./payment-indexer.js";
 import { collectPaymasterEvents } from "./paymaster-indexer.js";
 import { collectReceiptEvents, receiptsConfigured } from "./receipt-indexer.js";
 import { domainsConfigured } from "./domain-indexer.js";
-import { getResumeBlock, setCursor } from "./cursor.js";
+import { getLastScannedBlock, getResumeBlock, setCursor } from "./cursor.js";
 import {
   lastIndexedBlockFromEvents,
   loadEvents,
@@ -131,7 +131,9 @@ export function getProtocolStatsResponse(): ReturnType<typeof aggregateProtocolS
     chainId: CHAIN_ID,
     receiptsConfigured: receiptsConfigured(ctx),
     domainsConfigured: domainsConfigured(),
-    lastIndexedBlock: lastIndexedBlockFromEvents(CHAIN_ID),
+    // The scan cursor (last fully-scanned block) is the honest sync head; fall
+    // back to the last block that held an event before the first cursor write.
+    lastIndexedBlock: getLastScannedBlock(CHAIN_ID) ?? lastIndexedBlockFromEvents(CHAIN_ID),
     now: Math.floor(Date.now() / 1000),
   });
 }

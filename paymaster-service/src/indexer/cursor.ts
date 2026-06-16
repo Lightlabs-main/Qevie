@@ -43,6 +43,17 @@ export function getResumeBlock(chainId: number): bigint {
   return BigInt(rec.lastBlock) + 1n;
 }
 
+/**
+ * Last block the indexer has fully scanned for a chain (the cursor head), or
+ * null before the first tick. This is the honest "last indexed block" for the
+ * dashboard — it advances every tick whether or not the range held events,
+ * unlike the last-event block which can lag far behind during a quiet backfill.
+ */
+export function getLastScannedBlock(chainId: number): number | null {
+  const rec = load().find((r) => r.chainId === chainId);
+  return rec === undefined ? null : Number(rec.lastBlock);
+}
+
 /** Persist the highest block indexed at confirmation depth for a chain. */
 export function setCursor(chainId: number, lastBlock: bigint, nowSeconds: number): void {
   const records = load();
