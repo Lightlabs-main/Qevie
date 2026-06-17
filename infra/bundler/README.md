@@ -62,9 +62,30 @@ class ReputationManager:
         "0xd41c837e0c91024b41a2f456df4100d0c964bbb1",  # QeviePaymaster (lowercase)
         "0x77d6229316e3efefd22c2fa267464db7665446a6",  # QevieAccountFactory (lowercase)
     ]
+
+    def get_status(self, entity: str) -> ReputationStatus:
+        entity_address = entity.lower()
+        if entity_address in self.white_list:        # <-- qevie patch
+            return ReputationStatus.OK               # never throttle/ban our own entities
+        if entity_address not in self.entities_reputation:
+            return ReputationStatus.OK
+        ...  # unchanged
 ```
 
 Then `pm2 restart qevie-bundler`. Addresses must be lowercase (the check
 compares `entity.lower()`). The private mempool makes this safe: the reputation
 system exists to protect a shared mempool from DoS, which a single-operator
 bundler does not have.
+
+**Both patches are required.** The `white_list` field alone only short-circuits
+the *stake* check (`-32505` unstaked); the ban/throttle path
+(`_verify_banned_and_throttled_entities` → `get_status`) does NOT consult the
+whitelist, so after a few failed ops the paymaster gets banned with `-32504
+"banned paymaster"`. Patching `get_status` to return `OK` for whitelisted
+entities covers both paths and clears an existing ban immediately.
+
+If the bundler crash-loops on `Bind failed … Address already in use` for port
+4337 after a restart, an orphaned python child still holds the socket. Recover
+with: `pm2 stop qevie-bundler && pkill -9 -f voltaire_bundler && fuser -k
+4337/tcp` (wait until `ss -ltnp | grep :4337` is empty) `&& pm2 start
+qevie-bundler`.
