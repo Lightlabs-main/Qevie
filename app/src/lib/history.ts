@@ -307,6 +307,18 @@ interface BatchPaidLog extends ContractEventLog {
   };
 }
 
+/**
+ * Recover the creation time (ms) embedded in a history id by makeHistoryId
+ * (`${prefix}_${Date.now()}_${rand}`). The id is fixed at creation, so it is a
+ * more reliable source than a stored `createdAt`, which can be lost or clobbered
+ * by a later re-persist — that made every link in History → Links show the same
+ * date. Returns null when the id has no parseable timestamp.
+ */
+export function timestampFromHistoryId(id: string): number | null {
+  const ms = Number(id.split("_")[1]);
+  return Number.isFinite(ms) && ms > 0 ? ms : null;
+}
+
 export function makeHistoryId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -906,10 +918,13 @@ function deserializeLink(link: StoredLinkHistory): LinkHistoryItem {
     label: link.label,
     uri: link.uri,
     shareUrl: canonicalShareUrl(link.uri, link.shareUrl),
+    // Prefer the immutable timestamp baked into the id over the stored
+    // createdAt, which earlier re-persists could collapse to a single value.
+    createdAt: timestampFromHistoryId(link.id)
+      ?? (Number.isFinite(link.createdAt) && link.createdAt > 0 ? link.createdAt : 0),
     to: link.to,
     targetAddress: link.targetAddress,
     amount: link.amount !== null ? BigInt(link.amount) : null,
-    createdAt: link.createdAt,
     expiry: link.expiry,
     maxUses: link.maxUses,
     status: link.status,

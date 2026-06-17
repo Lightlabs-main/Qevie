@@ -512,7 +512,7 @@ function EmptyState({ label }: { label: string }): React.ReactElement {
 }
 
 function formatTime(timestamp: number): string {
-  if (timestamp <= 0) return "Unknown time";
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return "Unknown time";
   return new Date(timestamp).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
