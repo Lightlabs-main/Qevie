@@ -2,11 +2,17 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { formatUnits } from "viem";
 import { useQevieClient } from "@qevie/sdk/react";
-import type { QevieClient, SubscriptionRecord } from "@qevie/sdk";
+import type { SubscriptionRecord } from "@qevie/sdk";
 import { useWallet } from "../hooks/useWallet.js";
 import { gaslessParams } from "../lib/gasless.js";
 import { useGasStatus } from "../lib/useGasStatus.js";
 import { GasStatusPanel } from "../components/GasStatusPanel.js";
+import {
+  frequencyLabel,
+  isCancellable,
+  loadSubscriptionsFor,
+  subStatus,
+} from "../lib/subscriptions.js";
 
 const PERIOD_PRESETS = [
   { label: "Daily", days: 1 },
@@ -14,45 +20,8 @@ const PERIOD_PRESETS = [
   { label: "Monthly", days: 30 },
 ];
 
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-
-/** Human label for a subscription period in seconds. */
-function frequencyLabel(seconds: number): string {
-  if (seconds === 86_400) return "Daily";
-  if (seconds === 604_800) return "Weekly";
-  if (seconds === 2_592_000) return "Monthly";
-  const days = Math.round(seconds / 86_400);
-  return days <= 1 ? `Every ${seconds}s` : `Every ${days} days`;
-}
-
 function short(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
-
-/**
- * Enumerate a payer's subscriptions. SubscriptionManager exposes no list view
- * or event in the ABI, and subIds are a sequential counter, so we walk ids from
- * 1 and stop after a run of empties (past the global max). Bounded so a large
- * global count can't hang the page — a server-side index can replace this later.
- */
-async function loadSubscriptionsFor(client: QevieClient, owner: string): Promise<SubscriptionRecord[]> {
-  const found: SubscriptionRecord[] = [];
-  let consecutiveEmpty = 0;
-  for (let id = 1; id <= 250 && consecutiveEmpty < 6; id++) {
-    let sub: SubscriptionRecord | null = null;
-    try {
-      sub = await client.getSubscription(BigInt(id));
-    } catch {
-      sub = null;
-    }
-    if (sub === null || sub.payer.toLowerCase() === ZERO_ADDRESS) {
-      consecutiveEmpty += 1;
-      continue;
-    }
-    consecutiveEmpty = 0;
-    if (sub.payer.toLowerCase() === owner.toLowerCase()) found.push(sub);
-  }
-  return found;
 }
 
 export default function Subscriptions(): React.ReactElement {
@@ -208,15 +177,6 @@ export default function Subscriptions(): React.ReactElement {
   );
 }
 
-/** Display status for a subscription record. */
-function subStatus(sub: SubscriptionRecord): { label: string; cls: string } {
-  if (!sub.active) return { label: "Cancelled", cls: "status-warn" };
-  if (sub.maxPayments > 0n && sub.paymentsMade >= sub.maxPayments) {
-    return { label: "Completed", cls: "text-muted" };
-  }
-  return { label: "Active", cls: "status-good" };
-}
-
 function SubscriptionList({
   subs,
   cancelingId,
@@ -241,7 +201,7 @@ function SubscriptionList({
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         {subs.map((sub) => {
           const status = subStatus(sub);
-          const canCancel = sub.active && !(sub.maxPayments > 0n && sub.paymentsMade >= sub.maxPayments);
+          const canCancel = isCancellable(sub);
           const busy = cancelingId === sub.subId.toString();
           return (
             <section className="surface-card tight-stack" key={sub.subId.toString()}>

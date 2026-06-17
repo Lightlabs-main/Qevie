@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useQevieClient } from "@qevie/sdk/react";
+import type { SubscriptionRecord } from "@qevie/sdk";
 import { useWallet } from "../hooks/useWallet.js";
 import {
   formatQusdc,
@@ -13,9 +14,15 @@ import {
   type LinkHistoryItem,
   type RequestHistoryItem,
 } from "../lib/history.js";
+import {
+  frequencyLabel,
+  isCancellable,
+  loadSubscriptionsFor,
+  subStatus,
+} from "../lib/subscriptions.js";
 import { APP_CONFIG } from "../config.js";
 
-type Tab = "overview" | "links" | "requests" | "batches";
+type Tab = "overview" | "links" | "requests" | "batches" | "subscriptions";
 
 const EXPLORER = APP_CONFIG.chainId === 1990
   ? "https://mainnet.qie.digital"
@@ -23,7 +30,7 @@ const EXPLORER = APP_CONFIG.chainId === 1990
 
 export default function History(): React.ReactElement {
   const client = useQevieClient();
-  const { address } = useWallet();
+  const { address, signer } = useWallet();
 
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(true);
@@ -32,6 +39,8 @@ export default function History(): React.ReactElement {
   const [requests, setRequests] = useState<RequestHistoryItem[]>([]);
   const [batches, setBatches] = useState<BatchHistoryItem[]>([]);
   const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [subs, setSubs] = useState<SubscriptionRecord[]>([]);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -44,19 +53,22 @@ export default function History(): React.ReactElement {
           withTimeout(getRequestHistory(client, address), 12_000),
           withTimeout(getBatchHistory(client, address), 12_000),
           withTimeout(getGlobalFeed(client), 12_000),
+          withTimeout(address !== null ? loadSubscriptionsFor(client, address) : Promise.resolve<SubscriptionRecord[]>([]), 12_000),
         ]);
         if (!mounted) return;
-        const [nextLinks, nextRequests, nextBatches, nextFeed] = results;
+        const [nextLinks, nextRequests, nextBatches, nextFeed, nextSubs] = results;
         setLinks(nextLinks.status === "fulfilled" ? nextLinks.value : []);
         setRequests(nextRequests.status === "fulfilled" ? nextRequests.value : []);
         setBatches(nextBatches.status === "fulfilled" ? nextBatches.value : []);
         setFeed(nextFeed.status === "fulfilled" ? nextFeed.value : []);
+        setSubs(nextSubs.status === "fulfilled" ? nextSubs.value : []);
 
         const failures = [
           nextLinks,
           nextRequests,
           nextBatches,
           nextFeed,
+          nextSubs,
         ].filter((result) => result.status === "rejected");
 
         if (failures.length > 0) {
@@ -71,6 +83,23 @@ export default function History(): React.ReactElement {
     })();
     return () => { mounted = false; };
   }, [address, client]);
+
+  const handleCancelSub = async (subId: bigint): Promise<void> => {
+    if (signer === null) {
+      setError("Connect your wallet to cancel a subscription.");
+      return;
+    }
+    setCancelingId(subId.toString());
+    setError(null);
+    try {
+      await client.cancelSubscription(signer, subId);
+      if (address !== null) setSubs(await loadSubscriptionsFor(client, address));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to cancel subscription");
+    } finally {
+      setCancelingId(null);
+    }
+  };
 
   const summary = useMemo(() => {
     const paidLinks = links.filter((item) => item.status === "paid").length;
@@ -99,6 +128,7 @@ export default function History(): React.ReactElement {
           ["links", "Links"],
           ["requests", "Requests"],
           ["batches", "Batches"],
+          ["subscriptions", "Subscriptions"],
         ].map(([key, label]) => (
           <button
             key={key}
@@ -164,6 +194,22 @@ export default function History(): React.ReactElement {
               )}
             </div>
           </section>
+
+          {subs.length > 0 && (
+            <section className="surface-card">
+              <div className="section-label">Recurring payments</div>
+              <div className="tight-stack">
+                {subs.slice(0, 3).map((sub) => (
+                  <SubscriptionRow
+                    key={sub.subId.toString()}
+                    sub={sub}
+                    canceling={cancelingId === sub.subId.toString()}
+                    onCancel={() => { void handleCancelSub(sub.subId); }}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
 
@@ -187,6 +233,21 @@ export default function History(): React.ReactElement {
         <section className="tight-stack">
           {batches.length === 0 ? <EmptyState label="No batch payments found for this wallet." /> : batches.map((item) => (
             <BatchRow key={item.batchId} item={item} />
+          ))}
+        </section>
+      )}
+
+      {tab === "subscriptions" && (
+        <section className="tight-stack">
+          {subs.length === 0 ? (
+            <EmptyState label="No recurring payments found for this wallet." />
+          ) : subs.map((sub) => (
+            <SubscriptionRow
+              key={sub.subId.toString()}
+              sub={sub}
+              canceling={cancelingId === sub.subId.toString()}
+              onCancel={() => { void handleCancelSub(sub.subId); }}
+            />
           ))}
         </section>
       )}
@@ -297,6 +358,48 @@ function BatchRow({ item }: { item: BatchHistoryItem }): React.ReactElement {
           </a>
         )}
       </div>
+    </div>
+  );
+}
+
+function SubscriptionRow({
+  sub,
+  canceling,
+  onCancel,
+}: {
+  sub: SubscriptionRecord;
+  canceling: boolean;
+  onCancel(): void;
+}): React.ReactElement {
+  const status = subStatus(sub);
+  return (
+    <div className="surface-card history-row">
+      <div className="flex-between" style={{ gap: "var(--s-2)" }}>
+        <div>
+          <div style={{ fontWeight: 700 }}>
+            {formatQusdc(sub.amount)} · {frequencyLabel(Number(sub.period))}
+          </div>
+          <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+            To {shortAddress(sub.payee)} · {sub.paymentsMade.toString()}/{sub.maxPayments.toString()} paid
+          </div>
+        </div>
+        <span className={status.cls}>{status.label}</span>
+      </div>
+      {sub.active && (
+        <div className="text-muted" style={{ fontSize: "0.75rem", marginTop: "var(--s-2)" }}>
+          Next charge {formatTime(Number(sub.nextChargeAt) * 1000)}
+        </div>
+      )}
+      {isCancellable(sub) && (
+        <button
+          className="btn-secondary btn-sm"
+          disabled={canceling}
+          onClick={onCancel}
+          style={{ marginTop: "var(--s-2)", alignSelf: "flex-start" }}
+        >
+          {canceling ? "Cancelling…" : "Cancel subscription"}
+        </button>
+      )}
     </div>
   );
 }
