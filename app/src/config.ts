@@ -44,8 +44,15 @@ const paymasterServiceUrl =
 const statsApiUrl =
   import.meta.env["VITE_STATS_API_URL"] ?? paymasterServiceUrl;
 
+// Canonical public origin for shareable links (payment links, QR codes). The
+// app is reachable on several hosts (qevie.xyz, qevie.duckdns.org, …) but links
+// people receive should always point at the public domain, never an internal
+// host, so we pin them to qevie.xyz on any known mainnet host.
+const CANONICAL_APP_URL = "https://qevie.xyz";
 const appBaseUrl = import.meta.env["VITE_APP_BASE_URL"] ??
-  (typeof window !== "undefined" ? window.location.origin : "https://qevie.xyz");
+  (isForcedMainnetHost
+    ? CANONICAL_APP_URL
+    : (typeof window !== "undefined" ? window.location.origin : CANONICAL_APP_URL));
 
 const contractAddresses = isTestnet ? TESTNET_CONTRACTS : MAINNET_CONTRACTS;
 const receiptRegistry = import.meta.env["VITE_RECEIPT_REGISTRY_ADDRESS"];

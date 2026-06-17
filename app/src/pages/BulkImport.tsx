@@ -7,6 +7,7 @@ import { gaslessParams } from "../lib/gasless.js";
 import { isXlsx, xlsxToCsv } from "../lib/xlsx.js";
 import { useGasStatus } from "../lib/useGasStatus.js";
 import { GasStatusPanel } from "../components/GasStatusPanel.js";
+import { CopyButton } from "../components/CopyButton.js";
 import {
   approveImportJob,
   confirmImportRows,
@@ -335,9 +336,7 @@ export default function BulkImport(): React.ReactElement {
                     onFocus={(e) => e.currentTarget.select()}
                     style={{ flex: 1, fontSize: "0.7rem", padding: "0.4rem", fontFamily: "monospace" }}
                   />
-                  <button className="btn-ghost" onClick={() => { void navigator.clipboard.writeText(i.paymentLink as string); }}>
-                    Copy
-                  </button>
+                  <CopyButton value={i.paymentLink as string} />
                 </div>
               </div>
             ))}

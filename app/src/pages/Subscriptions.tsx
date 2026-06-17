@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { formatUnits } from "viem";
 import { useQevieClient } from "@qevie/sdk/react";
+import type { QevieClient, SubscriptionRecord } from "@qevie/sdk";
 import { useWallet } from "../hooks/useWallet.js";
 import { gaslessParams } from "../lib/gasless.js";
 import { useGasStatus } from "../lib/useGasStatus.js";
@@ -11,6 +13,47 @@ const PERIOD_PRESETS = [
   { label: "Weekly", days: 7 },
   { label: "Monthly", days: 30 },
 ];
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+/** Human label for a subscription period in seconds. */
+function frequencyLabel(seconds: number): string {
+  if (seconds === 86_400) return "Daily";
+  if (seconds === 604_800) return "Weekly";
+  if (seconds === 2_592_000) return "Monthly";
+  const days = Math.round(seconds / 86_400);
+  return days <= 1 ? `Every ${seconds}s` : `Every ${days} days`;
+}
+
+function short(addr: string): string {
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+/**
+ * Enumerate a payer's subscriptions. SubscriptionManager exposes no list view
+ * or event in the ABI, and subIds are a sequential counter, so we walk ids from
+ * 1 and stop after a run of empties (past the global max). Bounded so a large
+ * global count can't hang the page — a server-side index can replace this later.
+ */
+async function loadSubscriptionsFor(client: QevieClient, owner: string): Promise<SubscriptionRecord[]> {
+  const found: SubscriptionRecord[] = [];
+  let consecutiveEmpty = 0;
+  for (let id = 1; id <= 250 && consecutiveEmpty < 6; id++) {
+    let sub: SubscriptionRecord | null = null;
+    try {
+      sub = await client.getSubscription(BigInt(id));
+    } catch {
+      sub = null;
+    }
+    if (sub === null || sub.payer.toLowerCase() === ZERO_ADDRESS) {
+      consecutiveEmpty += 1;
+      continue;
+    }
+    consecutiveEmpty = 0;
+    if (sub.payer.toLowerCase() === owner.toLowerCase()) found.push(sub);
+  }
+  return found;
+}
 
 export default function Subscriptions(): React.ReactElement {
   const client = useQevieClient();
@@ -28,6 +71,27 @@ export default function Subscriptions(): React.ReactElement {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [subs, setSubs] = useState<SubscriptionRecord[] | null>(null);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
+
+  const refreshSubs = useCallback(async (): Promise<void> => {
+    if (address === null) { setSubs([]); return; }
+    try { setSubs(await loadSubscriptionsFor(client, address)); }
+    catch { setSubs([]); }
+  }, [client, address]);
+
+  useEffect(() => { void refreshSubs(); }, [refreshSubs]);
+
+  const handleCancel = async (subId: bigint): Promise<void> => {
+    if (signer === null) { setError("Wallet not connected"); return; }
+    setCancelingId(subId.toString()); setError(null);
+    try {
+      await client.cancelSubscription(signer, subId);
+      await refreshSubs();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to cancel subscription");
+    } finally { setCancelingId(null); }
+  };
 
   const handleSubscribe = async (): Promise<void> => {
     if (signer === null || address === null) { setError("Wallet not connected"); return; }
@@ -41,6 +105,7 @@ export default function Subscriptions(): React.ReactElement {
         maxPayments: parseInt(maxPayments),
         ...gas,
       });
+      void refreshSubs();
       setSuccess(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create subscription");
@@ -74,6 +139,14 @@ export default function Subscriptions(): React.ReactElement {
       <p className="text-muted mb-4" style={{ fontSize: "0.8125rem" }}>
         Authorize automatic QUSDC payments on a schedule. Cancel anytime.
       </p>
+
+      {address !== null && (
+        <SubscriptionList
+          subs={subs}
+          cancelingId={cancelingId}
+          onCancel={(subId) => { void handleCancel(subId); }}
+        />
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         <div className="input-group">
@@ -132,5 +205,84 @@ export default function Subscriptions(): React.ReactElement {
         </button>
       </div>
     </main>
+  );
+}
+
+/** Display status for a subscription record. */
+function subStatus(sub: SubscriptionRecord): { label: string; cls: string } {
+  if (!sub.active) return { label: "Cancelled", cls: "status-warn" };
+  if (sub.maxPayments > 0n && sub.paymentsMade >= sub.maxPayments) {
+    return { label: "Completed", cls: "text-muted" };
+  }
+  return { label: "Active", cls: "status-good" };
+}
+
+function SubscriptionList({
+  subs,
+  cancelingId,
+  onCancel,
+}: {
+  subs: SubscriptionRecord[] | null;
+  cancelingId: string | null;
+  onCancel(subId: bigint): void;
+}): React.ReactElement | null {
+  if (subs === null) {
+    return (
+      <div className="card" style={{ marginBottom: "1.25rem", display: "flex", justifyContent: "center", padding: "1.25rem" }}>
+        <span className="spinner" style={{ width: 20, height: 20 }} />
+      </div>
+    );
+  }
+  if (subs.length === 0) return null;
+
+  return (
+    <div style={{ marginBottom: "1.5rem" }}>
+      <div className="section-label" style={{ marginBottom: "0.5rem" }}>Your subscriptions</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {subs.map((sub) => {
+          const status = subStatus(sub);
+          const canCancel = sub.active && !(sub.maxPayments > 0n && sub.paymentsMade >= sub.maxPayments);
+          const busy = cancelingId === sub.subId.toString();
+          return (
+            <section className="surface-card tight-stack" key={sub.subId.toString()}>
+              <div className="flex-between">
+                <strong>${formatUnits(sub.amount, 6)} {frequencyLabel(Number(sub.period))}</strong>
+                <span className={status.cls}>{status.label}</span>
+              </div>
+              <SubRow label="To" value={short(sub.payee)} />
+              <SubRow
+                label="Payments"
+                value={`${sub.paymentsMade.toString()} of ${sub.maxPayments.toString()} made`}
+              />
+              {sub.active && (
+                <SubRow
+                  label="Next charge"
+                  value={new Date(Number(sub.nextChargeAt) * 1000).toLocaleString()}
+                />
+              )}
+              {canCancel && (
+                <button
+                  className="btn-secondary btn-sm"
+                  disabled={busy}
+                  onClick={() => onCancel(sub.subId)}
+                  style={{ alignSelf: "flex-start", marginTop: "0.25rem" }}
+                >
+                  {busy ? "Cancelling…" : "Cancel subscription"}
+                </button>
+              )}
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SubRow({ label, value }: { label: string; value: string }): React.ReactElement {
+  return (
+    <div className="flex-between" style={{ fontSize: "0.8125rem" }}>
+      <span className="text-muted">{label}</span>
+      <span style={{ fontWeight: 600 }}>{value}</span>
+    </div>
   );
 }

@@ -19,6 +19,22 @@ const FREQUENCY_OPTIONS: { label: string; intervalSeconds: number | null }[] = [
   { label: "Every month", intervalSeconds: 2_592_000 },
 ];
 
+/**
+ * A policy's display status. `active` on-chain is necessary but not sufficient:
+ * a policy past its `validUntil` is expired, and one before `validAfter` hasn't
+ * started — both should read accordingly and can't be scheduled against.
+ */
+function policyBadge(policy: AgentPolicy): { label: string; cls: string; usable: boolean } {
+  const now = Math.floor(Date.now() / 1000);
+  if (policy.guardianRevoked) return { label: "Guardian revoked", cls: "status-warn", usable: false };
+  if (!policy.active) return { label: "Revoked", cls: "status-warn", usable: false };
+  if (Number(policy.validUntil) > 0 && Number(policy.validUntil) < now) {
+    return { label: "Expired", cls: "status-warn", usable: false };
+  }
+  if (Number(policy.validAfter) > now) return { label: "Scheduled", cls: "status-warn", usable: false };
+  return { label: "Active", cls: "status-good", usable: true };
+}
+
 export default function AutopilotPolicies(): React.ReactElement {
   const client = useQevieClient();
   const { address } = useWallet();
@@ -75,13 +91,13 @@ export default function AutopilotPolicies(): React.ReactElement {
         <Empty title="No Autopilot policies" text="Create a scoped session policy for this smart account." />
       ) : (
         <div className="tight-stack">
-          {policies.map((policy) => (
+          {policies.map((policy) => {
+            const badge = policyBadge(policy);
+            return (
             <section className="surface-card tight-stack" key={policy.policyId}>
               <div className="flex-between">
                 <strong>{short(policy.policyId)}</strong>
-                <span className={policy.active ? "status-good" : "status-warn"}>
-                  {policy.guardianRevoked ? "Guardian revoked" : policy.active ? "Active" : "Revoked"}
-                </span>
+                <span className={badge.cls}>{badge.label}</span>
               </div>
               <Row label="Session key" value={short(policy.sessionKey)} />
               <Row label="Guardian" value={short(policy.guardian)} />
@@ -92,7 +108,7 @@ export default function AutopilotPolicies(): React.ReactElement {
               <Row label="Spent total" value={`${formatUnits(policy.spentTotal, 6)} QUSDC`} />
               <Row label="Expires" value={new Date(Number(policy.validUntil) * 1000).toLocaleString()} />
 
-              {policy.active && !policy.guardianRevoked && address !== null && (
+              {badge.usable && address !== null && (
                 <ScheduleForm
                   policy={policy}
                   smartAccount={address}
@@ -100,7 +116,8 @@ export default function AutopilotPolicies(): React.ReactElement {
                 />
               )}
             </section>
-          ))}
+            );
+          })}
 
           <IntentsList
             intents={intents}
