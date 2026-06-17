@@ -3,6 +3,7 @@ import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import { USERNAME_REGISTRY_ABI, buildPaymentUri } from "@qevie/sdk";
 import { QRCodeSVG } from "qrcode.react";
+import BackButton from "../components/BackButton.js";
 
 export default function Profile(): React.ReactElement {
   const client = useQevieClient();
@@ -61,7 +62,10 @@ export default function Profile(): React.ReactElement {
 
   return (
     <main className="page">
-      <h2 style={{ marginBottom: "1.5rem" }}>Profile</h2>
+      <div className="page-header">
+        <BackButton />
+        <h2 className="page-title">Profile</h2>
+      </div>
 
       {/* QR for receiving */}
       {receiveUri !== null && (

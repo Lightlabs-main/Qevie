@@ -54,6 +54,16 @@ describe("parseAgentCommand", () => {
     expect(s.amount).toBe("10");
     expect(s.period).toBe("week");
     expect(s.maxRuns).toBe(4);
+    // "every Friday" anchors the first charge to the next Friday (a future
+    // timestamp), so the subscription never charges on the day it's created.
+    expect(s.startAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    expect(new Date(s.startAt! * 1000).getDay()).toBe(5);
+  });
+
+  it("leaves startAt unset for a non-weekday recurrence", () => {
+    const r = parseAgentCommand("Pay alice 5 QUSDC every week");
+    expect(r.kind).toBe("subscription");
+    expect((r as SubscriptionIntent).startAt).toBeUndefined();
   });
 
   it("blocks an ambiguous batch with no concrete recipients", () => {

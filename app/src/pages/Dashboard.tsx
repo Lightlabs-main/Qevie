@@ -8,6 +8,7 @@ import { gaslessParams } from "../lib/gasless.js";
 import { formatQusdc, useGasStatus } from "../lib/useGasStatus.js";
 import { GasStatusPanel } from "../components/GasStatusPanel.js";
 import MyStatsPanel from "../components/protocol/MyStatsPanel.js";
+import BackButton from "../components/BackButton.js";
 
 const FAUCET_QUSDC = 100_000_000n; // 100 QUSDC (6 decimals)
 const MINT_ABI = [
@@ -301,7 +302,10 @@ export default function Dashboard(): React.ReactElement {
 
   return (
     <main className="page fade-in">
-      <h2 style={{ marginBottom: "1.25rem" }}>Wallet</h2>
+      <div className="page-header">
+        <BackButton />
+        <h2 className="page-title">Wallet</h2>
+      </div>
 
       {/* Smart account — spendable balance */}
       <div className="card-gradient" style={{ marginBottom: "1rem" }}>

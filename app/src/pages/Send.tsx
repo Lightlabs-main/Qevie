@@ -8,6 +8,7 @@ import { APP_CONFIG } from "../config.js";
 import { gaslessParams } from "../lib/gasless.js";
 import { useGasStatus } from "../lib/useGasStatus.js";
 import { GasStatusPanel } from "../components/GasStatusPanel.js";
+import BackButton from "../components/BackButton.js";
 import { PAYMENT_REQUEST_ABI } from "@qevie/sdk";
 import { hexToString, type Address } from "viem";
 
@@ -346,6 +347,7 @@ export default function Send(): React.ReactElement {
   return (
     <main className="page fade-in">
       <div className="page-header">
+        <BackButton />
         <h2 className="page-title">Send QUSDC</h2>
       </div>
 

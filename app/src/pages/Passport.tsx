@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useQevieClient } from "@qevie/sdk/react";
 import { type Address } from "viem";
 import { useWallet } from "../hooks/useWallet.js";
+import { APP_CONFIG } from "../config.js";
 
 const PREF_PREFIX = "qevie_passport_visibility_v1:";
 
@@ -17,6 +18,7 @@ export default function Passport(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [passport, setPassport] = useState<Awaited<ReturnType<typeof client.getPassport>> | null>(null);
   const [showVolumePublicly, setShowVolumePublicly] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -105,7 +107,11 @@ export default function Passport(): React.ReactElement {
   const copyLink = (): void => {
     const path = alias !== null ? alias : account;
     if (path === null) return;
-    void navigator.clipboard.writeText(`${window.location.origin}/passport/${path}`);
+    // Share the canonical public domain (qevie.xyz), never the internal host
+    // the app happens to be served from (e.g. qevie.duckdns.org).
+    void navigator.clipboard.writeText(`${APP_CONFIG.appBaseUrl}/passport/${path}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
   };
 
   return (
@@ -144,7 +150,9 @@ export default function Passport(): React.ReactElement {
               Status: Verified by Qevie receipts
             </div>
             <div style={{ display: "flex", gap: "0.5rem", marginTop: "var(--s-2)", flexWrap: "wrap" }}>
-              <button className="btn-secondary btn-sm" onClick={copyLink}>Copy Passport Link</button>
+              <button className="btn-secondary btn-sm" onClick={copyLink}>
+                {copied ? "✓ Copied" : "Copy Passport Link"}
+              </button>
               <button className="btn-secondary btn-sm" onClick={handleDownload}>Download Passport Summary</button>
             </div>
           </section>

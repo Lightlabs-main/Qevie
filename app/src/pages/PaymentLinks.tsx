@@ -5,6 +5,7 @@ import { useQevieClient } from "@qevie/sdk/react";
 import { useWallet } from "../hooks/useWallet.js";
 import { APP_CONFIG } from "../config.js";
 import { makeHistoryId, saveCreatedLinks } from "../lib/history.js";
+import BackButton from "../components/BackButton.js";
 
 type Mode = "single" | "split";
 
@@ -228,6 +229,7 @@ export default function PaymentLinks(): React.ReactElement {
   return (
     <main className="page fade-in">
       <div className="page-header">
+        <BackButton />
         <h2 className="page-title">Payment Links</h2>
       </div>
 

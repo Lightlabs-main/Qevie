@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { parsePaymentUri } from "@qevie/sdk";
+import BackButton from "../components/BackButton.js";
 
 export default function Scan(): React.ReactElement {
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ export default function Scan(): React.ReactElement {
   return (
     <main className="page fade-in">
       <div className="page-header">
+        <BackButton />
         <h2 className="page-title">Scan & Pay</h2>
       </div>
 

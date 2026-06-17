@@ -23,6 +23,25 @@ const DAY_NAMES = new Set([
   "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
 ]);
 
+const WEEKDAY_INDEX: Record<string, number> = {
+  sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
+};
+
+/**
+ * Unix timestamp (seconds) of the NEXT occurrence of a named weekday, preserving
+ * the current time of day. Always a future time — if today is the named day, it
+ * resolves to that day next week, so "pay every friday" never anchors to a date
+ * in the past (the contract would otherwise charge immediately on creation).
+ */
+function nextWeekdayStart(dayName: string, now: Date = new Date()): number | null {
+  const target = WEEKDAY_INDEX[dayName.toLowerCase()];
+  if (target === undefined) return null;
+  const delta = (target - now.getDay() + 7) % 7 || 7;
+  const d = new Date(now);
+  d.setDate(d.getDate() + delta);
+  return Math.floor(d.getTime() / 1000);
+}
+
 function cleanRecipient(raw: string): string {
   return raw.trim().replace(/^@/, "").replace(/[.,!?]+$/, "");
 }
@@ -125,6 +144,9 @@ export function parseAgentCommand(input: string): ParseResult {
         };
       }
       const forMatch = lower.match(/for\s+(\d+)\s+(day|week|month|time)s?/);
+      // "every <weekday>" anchors the first charge to that weekday; otherwise the
+      // first charge defaults to now (startAt left undefined).
+      const startAt = nextWeekdayStart(subMatch[3]);
       const intent: SingleIntent = {
         kind: "subscription",
         recipientInput: cleanRecipient(subMatch[1]),
@@ -132,6 +154,7 @@ export function parseAgentCommand(input: string): ParseResult {
         period,
         intervalSeconds: PERIOD_SECONDS[period],
         ...(forMatch ? { maxRuns: Number(forMatch[1]) } : {}),
+        ...(startAt !== null ? { startAt } : {}),
       };
       return intent;
     }

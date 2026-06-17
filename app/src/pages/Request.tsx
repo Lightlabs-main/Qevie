@@ -10,6 +10,7 @@ import { PAYMENT_REQUEST_ABI } from "@qevie/sdk";
 import { gaslessParams } from "../lib/gasless.js";
 import { useGasStatus } from "../lib/useGasStatus.js";
 import { GasStatusPanel } from "../components/GasStatusPanel.js";
+import BackButton from "../components/BackButton.js";
 
 type Step = "form" | "created";
 
@@ -111,7 +112,10 @@ export default function Request(): React.ReactElement {
 
   return (
     <main className="page">
-      <h2 style={{ marginBottom: "1.5rem" }}>Request QUSDC</h2>
+      <div className="page-header">
+        <BackButton />
+        <h2 className="page-title">Request QUSDC</h2>
+      </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         <div>
           <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>

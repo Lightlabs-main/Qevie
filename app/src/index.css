@@ -923,6 +923,19 @@ input {
   font-family: var(--font-main);
   font-size: 1rem;
   transition: border-color 0.2s ease;
+  /* Dark UI: render native controls (date/time pickers, number spinners) for a
+     dark scheme so the datetime-local calendar indicator is visible and
+     clickable instead of a dark-on-dark invisible icon. */
+  color-scheme: dark;
+}
+
+/* Make the native datetime-local / date picker indicator clearly tappable. */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.85;
+  filter: invert(0.85);
 }
 
 input:focus {

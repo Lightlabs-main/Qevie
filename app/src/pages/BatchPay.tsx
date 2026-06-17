@@ -8,6 +8,7 @@ import { APP_CONFIG } from "../config.js";
 import { gaslessParams } from "../lib/gasless.js";
 import { useGasStatus } from "../lib/useGasStatus.js";
 import { GasStatusPanel } from "../components/GasStatusPanel.js";
+import BackButton from "../components/BackButton.js";
 
 const EXPLORER = APP_CONFIG.chainId === 1990
   ? "https://mainnet.qie.digital"
@@ -112,6 +113,7 @@ export default function BatchPay(): React.ReactElement {
   return (
     <main className="page fade-in">
       <div className="page-header">
+        <BackButton />
         <h2 className="page-title">Batch Payment</h2>
       </div>
       <p className="text-muted mb-4" style={{ fontSize: "0.8125rem" }}>

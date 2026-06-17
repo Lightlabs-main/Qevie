@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQevieClient } from "@qevie/sdk/react";
+import BackButton from "../components/BackButton.js";
 import type { SubscriptionRecord } from "@qevie/sdk";
 import { useWallet } from "../hooks/useWallet.js";
 import {
@@ -157,6 +158,7 @@ export default function History(): React.ReactElement {
   return (
     <main className="page fade-in">
       <div className="page-header">
+        <BackButton />
         <h2 className="page-title">History</h2>
       </div>
 

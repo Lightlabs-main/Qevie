@@ -1,4 +1,5 @@
 import React from "react";
+import BackButton from "../components/BackButton.js";
 
 const REPO_URL = "https://github.com/Lightlabs-main/Qevie";
 
@@ -6,6 +7,7 @@ export default function Developers(): React.ReactElement {
   return (
     <main className="page fade-in">
       <div className="page-header">
+        <BackButton />
         <h2 className="page-title">Developers</h2>
       </div>
       <p className="text-muted" style={{ marginBottom: "var(--s-3)" }}>

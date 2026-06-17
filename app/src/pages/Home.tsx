@@ -5,6 +5,7 @@ import { QUSDC_ABI } from "@qevie/sdk";
 import { useWallet } from "../hooks/useWallet.js";
 import { APP_CONFIG } from "../config.js";
 import Logo from "../components/Logo.js";
+import BackButton from "../components/BackButton.js";
 import { formatQusdc, getWalletFeed, type FeedItem } from "../lib/history.js";
 
 export default function Home(): React.ReactElement {
@@ -82,6 +83,7 @@ export default function Home(): React.ReactElement {
       {/* Header Branding */}
       <header className="page-header-tight flex-between">
         <div className="flex-center" style={{ gap: 12 }}>
+          <BackButton />
           <Logo size={44} glow={false} />
           <span style={{
             fontFamily: "var(--font-heading)",

@@ -130,6 +130,7 @@ export async function buildAgentCommand(
           periodDays: String(periodDays(parsed.period)),
         });
         if (parsed.maxRuns !== undefined) q.set("maxPayments", String(parsed.maxRuns));
+        if (parsed.startAt !== undefined) q.set("startAt", String(parsed.startAt));
         plan.manualHref = `/subscriptions?${q.toString()}`;
         plan.policyHref = "/autopilot/new";
         break;

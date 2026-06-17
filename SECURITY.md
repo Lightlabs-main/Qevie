@@ -1,8 +1,17 @@
+
 # SECURITY.md
 
-## Phase 1 Security Notes
+## Deployment Status
 
-This phase does not deploy a paymaster and does not custody user funds beyond whatever a smart account owner sends to their account for testing.
+Qevie runs on QIE mainnet (chain id `1990`, RPC `https://rpc1mainnet.qie.digital/`).
+The EntryPoint, smart-account factory, paymaster, bundler, AgentPolicyManager
+(Autopilot session policies), SubscriptionManager, ReceiptRegistry, and the
+read-only stats indexer are deployed. A testnet deployment (chain id `1983`)
+mirrors mainnet for testing.
+
+The contracts are non-custodial: neither the paymaster nor any Qevie service
+holds user QUSDC, and every spend is bounded by the smart-account, session-policy,
+and paymaster validation described below.
 
 ## Smart Account Controls
 
@@ -14,20 +23,31 @@ This phase does not deploy a paymaster and does not custody user funds beyond wh
 - Owner rotation rejects the zero address.
 - ECDSA validation rejects malleable high-`s` signatures and invalid `v` values.
 
-## Known Phase 1 Risks
+## Known Risks & Limitations
 
-- The account is single-owner. Multisig/recovery/session keys are out of scope for Phase 1.
-- UserOperation signing currently uses ERC-191 `signMessage` over the EntryPoint `userOpHash`; SDK work must preserve this exact scheme unless the account is upgraded deliberately.
-- Public QIE RPCs lack `debug_traceCall`. Bundler unsafe/no-trace mode is for testnet compatibility testing, not a final security posture.
-- EntryPoint has not been deployed yet. Only deploy the audited eth-infinitism v0.7 implementation.
+- The account is single-owner for the wallet owner. Delegated automation is
+  added through scoped **session keys** governed by AgentPolicyManager (see
+  "Agent-native execution safety"), not by widening owner authority. Multisig and
+  social recovery remain out of scope.
+- UserOperation signing uses ERC-191 `signMessage` over the EntryPoint
+  `userOpHash`; SDK work must preserve this exact scheme unless the account is
+  upgraded deliberately.
+- Public QIE RPCs lack `debug_traceCall`, so the bundler runs in unsafe/no-trace
+  mode. Paymaster and policy validation therefore guard against the abuse a
+  tracing bundler would otherwise reject.
+- `eth_estimateGas` on QIE returns an intrinsic-only estimate, so the SDK sets
+  explicit gas limits and verifies receipts rather than trusting the estimate.
 
-## Required Before Mainnet
+## Operational Security Requirements
 
-- External review of account and factory.
-- Paymaster adversarial tests before any paymaster funding.
-- Slither or equivalent static analysis.
-- Mainnet deployments verified on `https://mainnet.qie.digital/`.
-- No sponsored free tier without hard caps and Sybil gating.
+- Only the audited eth-infinitism v0.7 EntryPoint implementation is used.
+- The sponsored tier must keep hard per-account, daily, and global caps with
+  Sybil gating; it is never unlimited free gas.
+- Paymaster funding stays adversarially tested; QUSDC_GAS pricing requires a
+  fresh, liquid QIEDex route before any gas is fronted.
+- Mainnet contract deployments are verified on `https://mainnet.qie.digital/`.
+- Static analysis (Slither or equivalent) and external review precede contract
+  changes.
 
 ## Receipt and Passport Security
 

@@ -7,6 +7,7 @@ import { useWallet } from "../hooks/useWallet.js";
 import { gaslessParams } from "../lib/gasless.js";
 import { useGasStatus } from "../lib/useGasStatus.js";
 import { GasStatusPanel } from "../components/GasStatusPanel.js";
+import BackButton from "../components/BackButton.js";
 import {
   frequencyLabel,
   isCancellable,
@@ -31,6 +32,11 @@ export default function Subscriptions(): React.ReactElement {
 
   const [params] = useSearchParams();
   const prefillPeriod = Number(params.get("periodDays"));
+  // Agent commands like "pay … every friday" carry a first-charge anchor so the
+  // subscription doesn't charge immediately on the day it's created.
+  const prefillStartAt = Number(params.get("startAt"));
+  const startAt =
+    Number.isFinite(prefillStartAt) && prefillStartAt > 0 ? prefillStartAt : null;
   const [payee, setPayee] = useState(params.get("payee") ?? "");
   const [amount, setAmount] = useState(params.get("amount") ?? "");
   const [periodDays, setPeriodDays] = useState(
@@ -72,6 +78,7 @@ export default function Subscriptions(): React.ReactElement {
         amount: BigInt(Math.round(parseFloat(amount) * 1e6)),
         period: periodDays * 86400,
         maxPayments: parseInt(maxPayments),
+        ...(startAt !== null ? { startAt } : {}),
         ...gas,
       });
       void refreshSubs();
@@ -89,6 +96,9 @@ export default function Subscriptions(): React.ReactElement {
           <h1 style={{ marginBottom: "0.5rem" }}>Subscription active!</h1>
           <p className="text-muted" style={{ maxWidth: 300, margin: "0 auto" }}>
             ${parseFloat(amount).toFixed(2)} will be charged every {periodDays} day{periodDays === 1 ? "" : "s"}, automatically and gaslessly.
+            {startAt !== null && (
+              <> First charge on {new Date(startAt * 1000).toLocaleDateString()}.</>
+            )}
           </p>
           <button className="btn-secondary btn-lg" onClick={() => { setSuccess(false); setPayee(""); setAmount(""); }} style={{ marginTop: "2rem" }}>
             Create another
@@ -103,6 +113,7 @@ export default function Subscriptions(): React.ReactElement {
   return (
     <main className="page fade-in">
       <div className="page-header">
+        <BackButton />
         <h2 className="page-title">Recurring Payment</h2>
       </div>
       <p className="text-muted mb-4" style={{ fontSize: "0.8125rem" }}>

@@ -52,6 +52,11 @@ export interface SubscriptionIntent {
   intervalSeconds: number;
   /** Number of charges; undefined = open-ended. */
   maxRuns?: number;
+  /**
+   * Unix timestamp (seconds) for the first charge, when the command anchors to a
+   * specific day ("every friday" → the next Friday). Undefined = start now.
+   */
+  startAt?: number;
   memo?: string;
 }
 
