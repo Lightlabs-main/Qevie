@@ -1,6 +1,8 @@
 import {
   BATCH_PAYMENTS_ABI,
   PAYMENT_REQUEST_ABI,
+  type QevieProtocolEvent,
+  type QevieProtocolEventType,
 } from "@qevie/sdk";
 import {
   type Address,
@@ -9,6 +11,7 @@ import {
   parseAbiItem,
 } from "viem";
 import { APP_CONFIG } from "../config.js";
+import { statsClient } from "./statsClient.js";
 
 const LINKS_STORAGE_KEY = "qevie_history_links_v1";
 const HISTORY_BLOCK_WINDOW = 60_000n;
@@ -115,6 +118,105 @@ export interface FeedItem {
   amount: bigint;
   timestamp: number;
   txHash: Hash | null;
+}
+
+/**
+ * A single row in the indexed activity stream. The server-side indexer
+ * (`/api/me/events`, `/api/protocol/events`) returns normalized, already-confirmed
+ * protocol events instantly, so the History overview no longer depends on the slow
+ * client-side log scans (which time out against the QIE RPC). The detailed
+ * per-type tabs still use those scans on demand, since the index doesn't carry
+ * per-domain detail like a created-but-unpaid request or a link's share URL.
+ */
+export interface ActivityItem {
+  id: string;
+  type: QevieProtocolEventType;
+  title: string;
+  subtitle: string;
+  amount: bigint | null;
+  status: "pending" | "confirmed" | "failed";
+  timestamp: number;
+  txHash: Hash | null;
+}
+
+const ACTIVITY_LABELS: Record<QevieProtocolEventType, string> = {
+  POLICY_CREATED: "Autopilot policy created",
+  POLICY_PENDING: "Autopilot policy pending",
+  POLICY_REVOKED: "Autopilot policy revoked",
+  GUARDIAN_REVOKED: "Guardian revoked a policy",
+  SESSION_EXECUTED: "Autopilot payment",
+  SESSION_BATCH_EXECUTED: "Autopilot batch payout",
+  PAYMENT_EXECUTED: "Payment sent",
+  BATCH_EXECUTED: "Batch payout",
+  REQUEST_SETTLED: "Payment request settled",
+  SUBSCRIPTION_EXECUTED: "Subscription charge",
+  PAYMASTER_SPONSORED: "Gas sponsored",
+  QUSDC_GAS_CHARGED: "Gas paid in QUSDC",
+  RECEIPT_CREATED: "Receipt created",
+  DOMAIN_RESOLVED: "Domain resolved",
+  DOMAIN_RESOLUTION_FAILED: "Domain resolution failed",
+};
+
+function toActivityItem(e: QevieProtocolEvent): ActivityItem {
+  const amount = e.amountQusdc !== undefined && e.amountQusdc !== ""
+    ? safeBigInt(e.amountQusdc)
+    : null;
+  const detail = e.qieDomainInput ?? (e.smartAccount ? shortAddress(e.smartAccount) : "");
+  return {
+    id: e.id,
+    type: e.type,
+    title: ACTIVITY_LABELS[e.type] ?? e.type,
+    subtitle: e.reason ?? detail,
+    amount,
+    status: e.status,
+    timestamp: e.timestamp > 0 ? e.timestamp * 1000 : 0,
+    txHash: (e.txHash ?? null) as Hash | null,
+  };
+}
+
+function safeBigInt(value: string): bigint | null {
+  try {
+    return BigInt(value);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The user's recent activity, served from the indexer — instant and reliable.
+ * Returns [] (not throwing) when the stats API is unconfigured/unreachable so the
+ * page degrades to the on-demand scans rather than erroring.
+ */
+export async function getIndexedActivity(address: Address | null): Promise<ActivityItem[]> {
+  if (address === null) return [];
+  const res = await statsClient.getMyEvents({ smartAccount: address, limit: 200 });
+  return res.events.map(toActivityItem);
+}
+
+const FEED_KIND: Partial<Record<QevieProtocolEventType, FeedItem["kind"]>> = {
+  BATCH_EXECUTED: "batch_paid",
+  SESSION_BATCH_EXECUTED: "batch_paid",
+  REQUEST_SETTLED: "request_paid",
+  PAYMENT_EXECUTED: "transfer_sent",
+  SESSION_EXECUTED: "transfer_sent",
+  SUBSCRIPTION_EXECUTED: "transfer_sent",
+};
+
+/** Protocol-wide live feed, served from the indexer. */
+export async function getIndexedFeed(): Promise<FeedItem[]> {
+  const res = await statsClient.getProtocolEvents({ limit: 50 });
+  return res.events.map((e) => {
+    const item = toActivityItem(e);
+    return {
+      id: item.id,
+      kind: FEED_KIND[e.type] ?? "transfer_internal",
+      title: item.title,
+      subtitle: item.subtitle,
+      amount: item.amount ?? 0n,
+      timestamp: item.timestamp,
+      txHash: item.txHash,
+    };
+  });
 }
 
 interface BlockTimestampCache {

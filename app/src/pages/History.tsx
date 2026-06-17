@@ -1,14 +1,16 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQevieClient } from "@qevie/sdk/react";
 import type { SubscriptionRecord } from "@qevie/sdk";
 import { useWallet } from "../hooks/useWallet.js";
 import {
   formatQusdc,
   getBatchHistory,
-  getGlobalFeed,
+  getIndexedActivity,
+  getIndexedFeed,
   getLinkHistory,
   getRequestHistory,
   shortAddress,
+  type ActivityItem,
   type BatchHistoryItem,
   type FeedItem,
   type LinkHistoryItem,
@@ -23,6 +25,7 @@ import {
 import { APP_CONFIG } from "../config.js";
 
 type Tab = "overview" | "links" | "requests" | "batches" | "subscriptions";
+type DetailTab = "links" | "requests" | "batches";
 
 const EXPLORER = APP_CONFIG.chainId === 1990
   ? "https://mainnet.qie.digital"
@@ -35,54 +38,94 @@ export default function History(): React.ReactElement {
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [links, setLinks] = useState<LinkHistoryItem[]>([]);
-  const [requests, setRequests] = useState<RequestHistoryItem[]>([]);
-  const [batches, setBatches] = useState<BatchHistoryItem[]>([]);
+  // Indexed (instant, server-side) — the overview's primary source.
   const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [subs, setSubs] = useState<SubscriptionRecord[]>([]);
+  // Detailed per-type tabs — scanned from the chain lazily, on demand. `null`
+  // means "not loaded yet"; an array (even empty) means a scan has completed.
+  const [links, setLinks] = useState<LinkHistoryItem[] | null>(null);
+  const [requests, setRequests] = useState<RequestHistoryItem[] | null>(null);
+  const [batches, setBatches] = useState<BatchHistoryItem[] | null>(null);
+  const [tabLoading, setTabLoading] = useState<DetailTab | null>(null);
+  const [tabError, setTabError] = useState<Partial<Record<DetailTab, string>>>({});
   const [cancelingId, setCancelingId] = useState<string | null>(null);
+  // Detail scans in flight, so re-renders don't fire a second scan for a tab.
+  const inFlight = useRef<Set<DetailTab>>(new Set());
 
+  // Instant load: indexed activity + global feed + subscriptions. None of these
+  // page the slow RPC, so the overview never shows the "took too long" timeout.
   useEffect(() => {
     let mounted = true;
+    setLinks(null);
+    setRequests(null);
+    setBatches(null);
+    setTabError({});
+    inFlight.current.clear();
     void (async () => {
       setLoading(true);
       setError(null);
-      try {
-        const results = await Promise.allSettled([
-          withTimeout(getLinkHistory(client, address), 22_000),
-          withTimeout(getRequestHistory(client, address), 22_000),
-          withTimeout(getBatchHistory(client, address), 22_000),
-          withTimeout(getGlobalFeed(client), 22_000),
-          withTimeout(address !== null ? loadSubscriptionsFor(client, address) : Promise.resolve<SubscriptionRecord[]>([]), 22_000),
-        ]);
-        if (!mounted) return;
-        const [nextLinks, nextRequests, nextBatches, nextFeed, nextSubs] = results;
-        setLinks(nextLinks.status === "fulfilled" ? nextLinks.value : []);
-        setRequests(nextRequests.status === "fulfilled" ? nextRequests.value : []);
-        setBatches(nextBatches.status === "fulfilled" ? nextBatches.value : []);
-        setFeed(nextFeed.status === "fulfilled" ? nextFeed.value : []);
-        setSubs(nextSubs.status === "fulfilled" ? nextSubs.value : []);
-
-        const failures = [
-          nextLinks,
-          nextRequests,
-          nextBatches,
-          nextFeed,
-          nextSubs,
-        ].filter((result) => result.status === "rejected");
-
-        if (failures.length > 0) {
-          setError("Some history data took too long to load. Showing available results.");
-        }
-      } catch (e) {
-        if (!mounted) return;
-        setError(e instanceof Error ? e.message : "Failed to load history");
-      } finally {
-        if (mounted) setLoading(false);
+      const results = await Promise.allSettled([
+        getIndexedFeed(),
+        getIndexedActivity(address),
+        address !== null
+          ? loadSubscriptionsFor(client, address)
+          : Promise.resolve<SubscriptionRecord[]>([]),
+      ]);
+      if (!mounted) return;
+      const [nextFeed, nextActivity, nextSubs] = results;
+      setFeed(nextFeed.status === "fulfilled" ? nextFeed.value : []);
+      setActivity(nextActivity.status === "fulfilled" ? nextActivity.value : []);
+      setSubs(nextSubs.status === "fulfilled" ? nextSubs.value : []);
+      if (nextFeed.status === "rejected" && nextActivity.status === "rejected") {
+        setError("Activity service is unreachable right now. Open a detail tab to scan the chain directly.");
       }
+      setLoading(false);
     })();
     return () => { mounted = false; };
   }, [address, client]);
+
+  // Lazy detail scan: only the open tab is scanned, one event-type at a time, so
+  // we never fire the dozens-of-concurrent log queries that overwhelmed the RPC.
+  useEffect(() => {
+    if (address === null || (tab !== "links" && tab !== "requests" && tab !== "batches")) return;
+    const detail = tab;
+    const already = detail === "links" ? links : detail === "requests" ? requests : batches;
+    if (already !== null || inFlight.current.has(detail)) return;
+
+    let mounted = true;
+    inFlight.current.add(detail);
+    setTabLoading(detail);
+    setTabError((prev) => ({ ...prev, [detail]: undefined }));
+    void (async () => {
+      try {
+        const scan =
+          detail === "links" ? getLinkHistory(client, address)
+          : detail === "requests" ? getRequestHistory(client, address)
+          : getBatchHistory(client, address);
+        const value = await withTimeout(scan, 25_000);
+        if (!mounted) return;
+        if (detail === "links") setLinks(value as LinkHistoryItem[]);
+        else if (detail === "requests") setRequests(value as RequestHistoryItem[]);
+        else setBatches(value as BatchHistoryItem[]);
+      } catch {
+        if (!mounted) return;
+        // A failed scan still resolves the tab to empty so it stops spinning;
+        // the indexed overview remains the reliable view.
+        if (detail === "links") setLinks([]);
+        else if (detail === "requests") setRequests([]);
+        else setBatches([]);
+        setTabError((prev) => ({
+          ...prev,
+          [detail]: "The QIE RPC was too slow to scan full detail. Your confirmed activity is on the Overview tab.",
+        }));
+      } finally {
+        inFlight.current.delete(detail);
+        if (mounted) setTabLoading((cur) => (cur === detail ? null : cur));
+      }
+    })();
+    return () => { mounted = false; };
+  }, [tab, address, client, links, requests, batches]);
 
   const handleCancelSub = async (subId: bigint): Promise<void> => {
     if (signer === null) {
@@ -101,13 +144,18 @@ export default function History(): React.ReactElement {
     }
   };
 
+  // Counts come from the indexed activity (instant), so the cards are populated
+  // immediately on the overview without waiting for any chain scan.
   const summary = useMemo(() => {
-    const paidLinks = links.filter((item) => item.status === "paid").length;
-    const unpaidLinks = links.length - paidLinks;
-    const paidRequests = requests.filter((item) => item.status === "paid").length;
-    const unpaidRequests = requests.filter((item) => item.status === "unpaid").length;
-    return { paidLinks, unpaidLinks, paidRequests, unpaidRequests };
-  }, [links, requests]);
+    const count = (...types: ActivityItem["type"][]): number =>
+      activity.filter((item) => item.status !== "failed" && types.includes(item.type)).length;
+    return {
+      payments: count("PAYMENT_EXECUTED", "SESSION_EXECUTED"),
+      batches: count("BATCH_EXECUTED", "SESSION_BATCH_EXECUTED"),
+      requestsSettled: count("REQUEST_SETTLED"),
+      recurring: subs.filter((s) => s.active).length,
+    };
+  }, [activity, subs]);
 
   return (
     <main className="page fade-in">
@@ -116,10 +164,10 @@ export default function History(): React.ReactElement {
       </div>
 
       <div className="tight-grid" style={{ marginBottom: "var(--s-3)" }}>
-        <MetricCard label="Links paid" value={`${summary.paidLinks}`} />
-        <MetricCard label="Links unpaid" value={`${summary.unpaidLinks}`} />
-        <MetricCard label="Requests paid" value={`${summary.paidRequests}`} />
-        <MetricCard label="Requests unpaid" value={`${summary.unpaidRequests}`} />
+        <MetricCard label="Payments" value={`${summary.payments}`} />
+        <MetricCard label="Batch payouts" value={`${summary.batches}`} />
+        <MetricCard label="Requests settled" value={`${summary.requestsSettled}`} />
+        <MetricCard label="Recurring active" value={`${summary.recurring}`} />
       </div>
 
       <div className="history-tabs" style={{ marginBottom: "var(--s-3)" }}>
@@ -172,25 +220,14 @@ export default function History(): React.ReactElement {
           </section>
 
           <section className="surface-card">
-            <div className="section-label">Recent links</div>
+            <div className="section-label">Your recent activity</div>
             <div className="tight-stack">
-              {links.length === 0 ? <EmptyState label="No links created yet." /> : links.slice(0, 4).map((item) => (
-                <LinkRow key={item.id} item={item} />
-              ))}
-            </div>
-          </section>
-
-          <section className="surface-card">
-            <div className="section-label">Recent requests & batches</div>
-            <div className="tight-stack">
-              {requests.slice(0, 2).map((item) => (
-                <RequestRow key={`request_${item.requestId.toString()}`} item={item} />
-              ))}
-              {batches.slice(0, 2).map((item) => (
-                <BatchRow key={item.batchId} item={item} />
-              ))}
-              {requests.length === 0 && batches.length === 0 && (
-                <EmptyState label="No request or batch history yet." />
+              {activity.length === 0 ? (
+                <EmptyState label="No confirmed activity yet for this wallet." />
+              ) : (
+                activity.slice(0, 8).map((item) => (
+                  <ActivityRow key={item.id} item={item} />
+                ))
               )}
             </div>
           </section>
@@ -214,27 +251,42 @@ export default function History(): React.ReactElement {
       )}
 
       {tab === "links" && (
-        <section className="tight-stack">
-          {links.length === 0 ? <EmptyState label="No payment links created yet." /> : links.map((item) => (
+        <DetailSection
+          loading={tabLoading === "links"}
+          error={tabError.links}
+          empty={(links?.length ?? 0) === 0}
+          emptyLabel="No payment links found for this wallet."
+        >
+          {(links ?? []).map((item) => (
             <LinkRow key={item.id} item={item} />
           ))}
-        </section>
+        </DetailSection>
       )}
 
       {tab === "requests" && (
-        <section className="tight-stack">
-          {requests.length === 0 ? <EmptyState label="No request history found for this wallet." /> : requests.map((item) => (
+        <DetailSection
+          loading={tabLoading === "requests"}
+          error={tabError.requests}
+          empty={(requests?.length ?? 0) === 0}
+          emptyLabel="No request history found for this wallet."
+        >
+          {(requests ?? []).map((item) => (
             <RequestRow key={item.requestId.toString()} item={item} />
           ))}
-        </section>
+        </DetailSection>
       )}
 
       {tab === "batches" && (
-        <section className="tight-stack">
-          {batches.length === 0 ? <EmptyState label="No batch payments found for this wallet." /> : batches.map((item) => (
+        <DetailSection
+          loading={tabLoading === "batches"}
+          error={tabError.batches}
+          empty={(batches?.length ?? 0) === 0}
+          emptyLabel="No batch payments found for this wallet."
+        >
+          {(batches ?? []).map((item) => (
             <BatchRow key={item.batchId} item={item} />
           ))}
-        </section>
+        </DetailSection>
       )}
 
       {tab === "subscriptions" && (
@@ -279,6 +331,62 @@ function MetricCard({ label, value }: { label: string; value: string }): React.R
     <div className="surface-card" style={{ padding: "var(--s-2)" }}>
       <div className="text-muted" style={{ fontSize: "0.75rem" }}>{label}</div>
       <div style={{ fontWeight: 800, fontSize: "1.4rem", color: "var(--text-pure)" }}>{value}</div>
+    </div>
+  );
+}
+
+function DetailSection({
+  loading,
+  error,
+  empty,
+  emptyLabel,
+  children,
+}: {
+  loading: boolean;
+  error?: string;
+  empty: boolean;
+  emptyLabel: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  if (loading) {
+    return (
+      <div className="surface-card">
+        <div className="flex-center" style={{ gap: "0.65rem", justifyContent: "flex-start" }}>
+          <span className="spinner" />
+          <span className="text-muted" style={{ fontSize: "0.8125rem" }}>
+            Scanning the chain for full detail…
+          </span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <section className="tight-stack">
+      {error !== undefined && <div className="alert alert-error">{error}</div>}
+      {empty ? <EmptyState label={emptyLabel} /> : children}
+    </section>
+  );
+}
+
+function ActivityRow({ item }: { item: ActivityItem }): React.ReactElement {
+  return (
+    <div className="history-feed-row">
+      <div>
+        <div style={{ fontWeight: 700 }}>{item.title}</div>
+        <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+          {item.subtitle ? `${item.subtitle} · ` : ""}{formatTime(item.timestamp)}
+        </div>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        {item.amount !== null && (
+          <div style={{ fontWeight: 700 }}>{formatQusdc(item.amount)}</div>
+        )}
+        {item.txHash !== null && (
+          <a href={`${EXPLORER}/tx/${item.txHash}`} target="_blank" rel="noreferrer" className="history-link">
+            tx ↗
+          </a>
+        )}
+      </div>
     </div>
   );
 }
