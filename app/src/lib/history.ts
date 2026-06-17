@@ -13,7 +13,41 @@ import { APP_CONFIG } from "../config.js";
 const LINKS_STORAGE_KEY = "qevie_history_links_v1";
 const HISTORY_BLOCK_WINDOW = 60_000n;
 const FEED_BLOCK_WINDOW = 20_000n;
-const MAX_LOG_BLOCK_SPAN = 9_000n;
+// The QIE mainnet RPC rejects getLogs ranges wider than ~10k blocks, so every
+// scan has to page. A 10_000-block span (the proven ceiling) keeps chunk count
+// low; 9_999 makes the inclusive [from,to] span exactly 10_000 blocks.
+const MAX_LOG_BLOCK_SPAN = 9_999n;
+
+// Each log chunk answers in ~1.5-2s, and the old code paged sequentially, so a
+// multi-scan view (requests, feed) ran dozens of round-trips back-to-back and
+// blew past the page load timeout. We now fetch chunks in parallel, but cap the
+// total in-flight log queries across every concurrent scan: firing all of them
+// at once gets throttled by the RPC. This gate bounds global concurrency.
+const MAX_CONCURRENT_LOG_QUERIES = 8;
+let activeLogQueries = 0;
+const logQueryWaiters: Array<() => void> = [];
+
+async function withLogQuerySlot<T>(run: () => Promise<T>): Promise<T> {
+  if (activeLogQueries >= MAX_CONCURRENT_LOG_QUERIES) {
+    await new Promise<void>((resolve) => logQueryWaiters.push(resolve));
+  }
+  activeLogQueries += 1;
+  try {
+    return await run();
+  } finally {
+    activeLogQueries -= 1;
+    const next = logQueryWaiters.shift();
+    if (next !== undefined) next();
+  }
+}
+
+function blockRanges(fromBlock: bigint, toBlock: bigint): Array<{ from: bigint; to: bigint }> {
+  const ranges: Array<{ from: bigint; to: bigint }> = [];
+  for (let start = fromBlock; start <= toBlock; start += MAX_LOG_BLOCK_SPAN + 1n) {
+    ranges.push({ from: start, to: minBigInt(start + MAX_LOG_BLOCK_SPAN, toBlock) });
+  }
+  return ranges;
+}
 
 const TRANSFER_EVENT = parseAbiItem(
   "event Transfer(address indexed from, address indexed to, uint256 value)",
@@ -797,19 +831,18 @@ async function getPagedTransferLogs(
     toBlock: bigint;
   },
 ): Promise<TransferLog[]> {
-  const logs: TransferLog[] = [];
-  for (let start = args.fromBlock; start <= args.toBlock; start += MAX_LOG_BLOCK_SPAN + 1n) {
-    const end = minBigInt(start + MAX_LOG_BLOCK_SPAN, args.toBlock);
-    const chunk = await publicClient.getLogs({
-      address: args.address,
-      event: args.event,
-      args: args.args,
-      fromBlock: start,
-      toBlock: end,
-    });
-    logs.push(...chunk);
-  }
-  return logs;
+  const chunks = await Promise.all(
+    blockRanges(args.fromBlock, args.toBlock).map((range) =>
+      withLogQuerySlot(() => publicClient.getLogs({
+        address: args.address,
+        event: args.event,
+        args: args.args,
+        fromBlock: range.from,
+        toBlock: range.to,
+      })),
+    ),
+  );
+  return chunks.flat();
 }
 
 async function getPagedContractEvents(
@@ -823,20 +856,19 @@ async function getPagedContractEvents(
     toBlock: bigint;
   },
 ): Promise<ContractEventLog[]> {
-  const logs: ContractEventLog[] = [];
-  for (let start = args.fromBlock; start <= args.toBlock; start += MAX_LOG_BLOCK_SPAN + 1n) {
-    const end = minBigInt(start + MAX_LOG_BLOCK_SPAN, args.toBlock);
-    const chunk = await publicClient.getContractEvents({
-      address: args.address,
-      abi: args.abi,
-      eventName: args.eventName,
-      args: args.args,
-      fromBlock: start,
-      toBlock: end,
-    });
-    logs.push(...chunk);
-  }
-  return logs;
+  const chunks = await Promise.all(
+    blockRanges(args.fromBlock, args.toBlock).map((range) =>
+      withLogQuerySlot(() => publicClient.getContractEvents({
+        address: args.address,
+        abi: args.abi,
+        eventName: args.eventName,
+        args: args.args,
+        fromBlock: range.from,
+        toBlock: range.to,
+      })),
+    ),
+  );
+  return chunks.flat();
 }
 
 function minBigInt(a: bigint, b: bigint): bigint {

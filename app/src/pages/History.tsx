@@ -49,11 +49,11 @@ export default function History(): React.ReactElement {
       setError(null);
       try {
         const results = await Promise.allSettled([
-          withTimeout(getLinkHistory(client, address), 12_000),
-          withTimeout(getRequestHistory(client, address), 12_000),
-          withTimeout(getBatchHistory(client, address), 12_000),
-          withTimeout(getGlobalFeed(client), 12_000),
-          withTimeout(address !== null ? loadSubscriptionsFor(client, address) : Promise.resolve<SubscriptionRecord[]>([]), 12_000),
+          withTimeout(getLinkHistory(client, address), 22_000),
+          withTimeout(getRequestHistory(client, address), 22_000),
+          withTimeout(getBatchHistory(client, address), 22_000),
+          withTimeout(getGlobalFeed(client), 22_000),
+          withTimeout(address !== null ? loadSubscriptionsFor(client, address) : Promise.resolve<SubscriptionRecord[]>([]), 22_000),
         ]);
         if (!mounted) return;
         const [nextLinks, nextRequests, nextBatches, nextFeed, nextSubs] = results;
