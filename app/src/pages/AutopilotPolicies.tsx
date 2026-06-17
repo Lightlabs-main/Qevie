@@ -12,6 +12,12 @@ import {
   type AutopilotIntent,
 } from "../lib/autopilotIntents.js";
 
+// Chain-aware explorer base — follow the active chain (mainnet on chainId 1990),
+// not a hardcoded testnet host.
+const EXPLORER = APP_CONFIG.chainId === 1990
+  ? "https://mainnet.qie.digital"
+  : "https://testnet.qie.digital";
+
 const FREQUENCY_OPTIONS: { label: string; intervalSeconds: number | null }[] = [
   { label: "One time", intervalSeconds: null },
   { label: "Every day", intervalSeconds: 86_400 },
@@ -256,7 +262,7 @@ function IntentsList({
           {intent.lastTxHash !== undefined && (
             <a
               className="history-link"
-              href={`https://testnet.qie.digital/tx/${intent.lastTxHash}`}
+              href={`${EXPLORER}/tx/${intent.lastTxHash}`}
               target="_blank"
               rel="noreferrer"
             >

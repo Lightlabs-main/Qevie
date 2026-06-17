@@ -11,6 +11,12 @@ import AgentPipeline from "../components/AgentPipeline.js";
 
 type GasFallback = "sponsored-qusdc" | "sponsored-pause";
 
+// Chain-aware explorer base — must follow the active chain, not a hardcoded
+// testnet host (this build runs on QIE mainnet, chainId 1990).
+const EXPLORER = APP_CONFIG.chainId === 1990
+  ? "https://mainnet.qie.digital"
+  : "https://testnet.qie.digital";
+
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 export default function AutopilotNew(): React.ReactElement {
@@ -180,7 +186,7 @@ export default function AutopilotNew(): React.ReactElement {
           {txHash !== null && (
             <a
               className="history-link"
-              href={`https://testnet.qie.digital/tx/${txHash}`}
+              href={`${EXPLORER}/tx/${txHash}`}
               target="_blank"
               rel="noreferrer"
             >
