@@ -75,6 +75,7 @@ export interface StoredLinkHistory {
 export interface LinkHistoryItem {
   id: string;
   label: string;
+  uri: string;
   shareUrl: string;
   to: string;
   targetAddress: string | null;
@@ -859,11 +860,32 @@ function loadStoredLinks(): StoredLinkHistory[] {
   }
 }
 
+/**
+ * Canonical share URL for a stored link. Payment links must always point at the
+ * public app domain (APP_CONFIG.appBaseUrl), never the internal host the link
+ * happened to be created on (e.g. qevie.duckdns.org). The stored `uri` is
+ * host-agnostic, so we rebuild from it; for older records that lost their `uri`
+ * we rewrite the origin of the saved URL to the canonical base.
+ */
+function canonicalShareUrl(uri: string, fallback: string): string {
+  const base = APP_CONFIG.appBaseUrl.replace(/\/+$/, "");
+  if (uri !== "") return `${base}/pay?pay=${encodeURIComponent(uri)}`;
+  try {
+    const u = new URL(fallback);
+    const canonical = new URL(base);
+    u.protocol = canonical.protocol;
+    u.host = canonical.host;
+    return u.toString();
+  } catch {
+    return fallback;
+  }
+}
+
 function persistLinks(links: LinkHistoryItem[]): void {
   const serialized: StoredLinkHistory[] = links.map((link) => ({
     id: link.id,
     label: link.label,
-    uri: "",
+    uri: link.uri,
     shareUrl: link.shareUrl,
     to: link.to,
     targetAddress: link.targetAddress,
@@ -882,7 +904,8 @@ function deserializeLink(link: StoredLinkHistory): LinkHistoryItem {
   return {
     id: link.id,
     label: link.label,
-    shareUrl: link.shareUrl,
+    uri: link.uri,
+    shareUrl: canonicalShareUrl(link.uri, link.shareUrl),
     to: link.to,
     targetAddress: link.targetAddress,
     amount: link.amount !== null ? BigInt(link.amount) : null,
