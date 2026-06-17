@@ -6,13 +6,11 @@ import {
   formatQusdc,
   getBatchHistory,
   getIndexedActivity,
-  getIndexedFeed,
   getLinkHistory,
   getRequestHistory,
   shortAddress,
   type ActivityItem,
   type BatchHistoryItem,
-  type FeedItem,
   type LinkHistoryItem,
   type RequestHistoryItem,
 } from "../lib/history.js";
@@ -38,8 +36,8 @@ export default function History(): React.ReactElement {
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Indexed (instant, server-side) — the overview's primary source.
-  const [feed, setFeed] = useState<FeedItem[]>([]);
+  // This page is scoped to the connected wallet only — protocol-wide activity
+  // lives on the Dashboard. Indexed (instant, server-side) is the primary source.
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [subs, setSubs] = useState<SubscriptionRecord[]>([]);
   // Detailed per-type tabs — scanned from the chain lazily, on demand. `null`
@@ -53,8 +51,8 @@ export default function History(): React.ReactElement {
   // Detail scans in flight, so re-renders don't fire a second scan for a tab.
   const inFlight = useRef<Set<DetailTab>>(new Set());
 
-  // Instant load: indexed activity + global feed + subscriptions. None of these
-  // page the slow RPC, so the overview never shows the "took too long" timeout.
+  // Instant load: this wallet's indexed activity + its subscriptions. Neither
+  // pages the slow RPC, so the overview never shows the "took too long" timeout.
   useEffect(() => {
     let mounted = true;
     setLinks(null);
@@ -66,18 +64,16 @@ export default function History(): React.ReactElement {
       setLoading(true);
       setError(null);
       const results = await Promise.allSettled([
-        getIndexedFeed(),
         getIndexedActivity(address),
         address !== null
           ? loadSubscriptionsFor(client, address)
           : Promise.resolve<SubscriptionRecord[]>([]),
       ]);
       if (!mounted) return;
-      const [nextFeed, nextActivity, nextSubs] = results;
-      setFeed(nextFeed.status === "fulfilled" ? nextFeed.value : []);
+      const [nextActivity, nextSubs] = results;
       setActivity(nextActivity.status === "fulfilled" ? nextActivity.value : []);
       setSubs(nextSubs.status === "fulfilled" ? nextSubs.value : []);
-      if (nextFeed.status === "rejected" && nextActivity.status === "rejected") {
+      if (nextActivity.status === "rejected") {
         setError("Activity service is unreachable right now. Open a detail tab to scan the chain directly.");
       }
       setLoading(false);
@@ -207,19 +203,6 @@ export default function History(): React.ReactElement {
 
       {tab === "overview" && (
         <div className="tight-stack">
-          <section className="surface-card">
-            <div className="section-label">Live app feed</div>
-            <div className="tight-stack">
-              {feed.length === 0 ? (
-                <EmptyState label="No recent onchain app activity yet." />
-              ) : (
-                feed.map((item) => (
-                  <FeedRow key={item.id} item={item} />
-                ))
-              )}
-            </div>
-          </section>
-
           <section className="surface-card">
             <div className="section-label">Your recent activity</div>
             <div className="tight-stack">
@@ -509,27 +492,6 @@ function SubscriptionRow({
           {canceling ? "Cancelling…" : "Cancel subscription"}
         </button>
       )}
-    </div>
-  );
-}
-
-function FeedRow({ item }: { item: FeedItem }): React.ReactElement {
-  return (
-    <div className="history-feed-row">
-      <div>
-        <div style={{ fontWeight: 700 }}>{item.title}</div>
-        <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-          {item.subtitle} · {formatTime(item.timestamp)}
-        </div>
-      </div>
-      <div style={{ textAlign: "right" }}>
-        <div style={{ fontWeight: 700 }}>{formatQusdc(item.amount)}</div>
-        {item.txHash !== null && (
-          <a href={`${EXPLORER}/tx/${item.txHash}`} target="_blank" rel="noreferrer" className="history-link">
-            tx ↗
-          </a>
-        )}
-      </div>
     </div>
   );
 }
