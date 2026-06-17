@@ -99,15 +99,16 @@ export default function History(): React.ReactElement {
     setTabError((prev) => ({ ...prev, [detail]: undefined }));
     void (async () => {
       try {
-        const scan =
-          detail === "links" ? getLinkHistory(client, address)
-          : detail === "requests" ? getRequestHistory(client, address)
-          : getBatchHistory(client, address);
-        const value = await withTimeout(scan, 25_000);
-        if (!mounted) return;
-        if (detail === "links") setLinks(value as LinkHistoryItem[]);
-        else if (detail === "requests") setRequests(value as RequestHistoryItem[]);
-        else setBatches(value as BatchHistoryItem[]);
+        if (detail === "links") {
+          const value = await withTimeout(getLinkHistory(client, address), 25_000);
+          if (mounted) setLinks(value);
+        } else if (detail === "requests") {
+          const value = await withTimeout(getRequestHistory(client, address), 25_000);
+          if (mounted) setRequests(value);
+        } else {
+          const value = await withTimeout(getBatchHistory(client, address), 25_000);
+          if (mounted) setBatches(value);
+        }
       } catch {
         if (!mounted) return;
         // A failed scan still resolves the tab to empty so it stops spinning;
