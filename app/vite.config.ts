@@ -38,6 +38,9 @@ export default defineConfig({
         clientsClaim: true,
         globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
         skipWaiting: true,
+        // Reload already-open clients when a new worker activates so returning
+        // users are flushed off the previous cached bundle (see sw-reload.js).
+        importScripts: ["sw-reload.js"],
       },
     }),
   ],
