@@ -25,6 +25,13 @@ function short(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
+/** Unix seconds → value string for a <input type="datetime-local"> (local time). */
+function toLocalDatetimeInput(unixSeconds: number): string {
+  const d = new Date(unixSeconds * 1000);
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function Subscriptions(): React.ReactElement {
   const client = useQevieClient();
   const { signer, address } = useWallet();
@@ -35,7 +42,7 @@ export default function Subscriptions(): React.ReactElement {
   // Agent commands like "pay … every friday" carry a first-charge anchor so the
   // subscription doesn't charge immediately on the day it's created.
   const prefillStartAt = Number(params.get("startAt"));
-  const startAt =
+  const startAtParam =
     Number.isFinite(prefillStartAt) && prefillStartAt > 0 ? prefillStartAt : null;
   const [payee, setPayee] = useState(params.get("payee") ?? "");
   const [amount, setAmount] = useState(params.get("amount") ?? "");
@@ -43,6 +50,13 @@ export default function Subscriptions(): React.ReactElement {
     Number.isFinite(prefillPeriod) && prefillPeriod > 0 ? prefillPeriod : 30,
   );
   const [maxPayments, setMaxPayments] = useState(params.get("maxPayments") ?? "12");
+  // Explicit first-charge date. Empty = charge now. Prefilled from an agent
+  // command's weekday anchor (e.g. "every friday") so the date is visible and
+  // editable instead of silently defaulting to today.
+  const [firstCharge, setFirstCharge] = useState(
+    startAtParam !== null ? toLocalDatetimeInput(startAtParam) : "",
+  );
+  const minFirstCharge = toLocalDatetimeInput(Math.floor(Date.now() / 1000) + 60);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,12 +87,15 @@ export default function Subscriptions(): React.ReactElement {
     setLoading(true); setError(null);
     try {
       const gas = await gaslessParams(client, address);
+      const startAt = firstCharge
+        ? Math.floor(new Date(firstCharge).getTime() / 1000)
+        : undefined;
       await client.subscribe(signer, {
         payee: payee.trim(),
         amount: BigInt(Math.round(parseFloat(amount) * 1e6)),
         period: periodDays * 86400,
         maxPayments: parseInt(maxPayments),
-        ...(startAt !== null ? { startAt } : {}),
+        ...(startAt !== undefined ? { startAt } : {}),
         ...gas,
       });
       void refreshSubs();
@@ -96,8 +113,8 @@ export default function Subscriptions(): React.ReactElement {
           <h1 style={{ marginBottom: "0.5rem" }}>Subscription active!</h1>
           <p className="text-muted" style={{ maxWidth: 300, margin: "0 auto" }}>
             ${parseFloat(amount).toFixed(2)} will be charged every {periodDays} day{periodDays === 1 ? "" : "s"}, automatically and gaslessly.
-            {startAt !== null && (
-              <> First charge on {new Date(startAt * 1000).toLocaleDateString()}.</>
+            {firstCharge !== "" && (
+              <> First charge on {new Date(firstCharge).toLocaleDateString()}.</>
             )}
           </p>
           <button className="btn-secondary btn-lg" onClick={() => { setSuccess(false); setPayee(""); setAmount(""); }} style={{ marginTop: "2rem" }}>
@@ -151,6 +168,18 @@ export default function Subscriptions(): React.ReactElement {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="input-group">
+          <label className="input-label">
+            First charge <span className="text-dim">(optional, defaults to now)</span>
+          </label>
+          <input
+            type="datetime-local"
+            value={firstCharge}
+            min={minFirstCharge}
+            onChange={(e) => setFirstCharge(e.target.value)}
+          />
         </div>
 
         <div className="input-group">
